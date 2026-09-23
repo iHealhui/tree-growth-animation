@@ -1,0 +1,63 @@
+name: Deploy bundle preview to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # build-bundle.mjs zips via PowerShell's Compress-Archive, so this
+    # needs a Windows runner. Public repos get unlimited free Actions
+    # minutes regardless of OS.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: my-animation/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: my-animation
+
+      - name: Build delivery bundle
+        run: npm run bundle
+        working-directory: my-animation
+
+      - name: Locate latest bundle preview folder
+        id: find_preview
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem -Path "my-animation/exports/bundle" -Directory |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          "path=$($dir.FullName)/preview" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ steps.find_preview.outputs.path }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
