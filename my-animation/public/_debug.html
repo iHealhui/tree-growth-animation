@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html><head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+</head><body style="background:#333">
+<div id="c" style="width:600px;height:600px;background:#555"></div>
+<pre id="log" style="color:#0f0;font-size:12px"></pre>
+<script>
+  const log = (m) => document.getElementById('log').textContent += m + "\n";
+  const anim = lottie.loadAnimation({
+    container: document.getElementById('c'),
+    renderer: 'svg',
+    loop: true,
+    autoplay: true,
+    path: '/_debug_cloud2_only.json',
+  });
+  anim.addEventListener('data_ready', () => log('data_ready'));
+  anim.addEventListener('DOMLoaded', () => log('DOMLoaded, paths=' + document.getElementById('c').querySelectorAll('path').length));
+  anim.addEventListener('data_failed', () => log('data_failed'));
+  window.addEventListener('error', (e) => log('WINDOW ERROR: ' + e.message));
+</script>
+</body></html>

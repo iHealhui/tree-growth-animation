@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Export composite frames tree05 healthy (for ffmpeg -> mp4)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+<style>
+  body { background:#111; color:#0f0; font-family: monospace; font-size: 13px; }
+  #bgWrap, #treeWrap { position: absolute; left: -99999px; top: 0; }
+</style>
+</head><body>
+<pre id="log"></pre>
+<div id="bgWrap"></div>
+<div id="treeWrap"></div>
+<canvas id="composite"></canvas>
+<script>
+  const log = (msg) => { document.getElementById('log').textContent += msg + "\n"; console.log(msg); };
+
+  const FRAME_SERVER = 'http://localhost:3032';
+  const OUTPUT_SIZE = 480;
+  const EXPORT_FPS = 24;
+  const SOURCE_FPS = 30;
+  const SOURCE_TOTAL_FRAMES = 900; // 30s master loop
+  const STEP = SOURCE_FPS / EXPORT_FPS;
+
+  document.getElementById('bgWrap').style.width = OUTPUT_SIZE + 'px';
+  document.getElementById('bgWrap').style.height = OUTPUT_SIZE + 'px';
+  document.getElementById('treeWrap').style.width = OUTPUT_SIZE + 'px';
+  document.getElementById('treeWrap').style.height = OUTPUT_SIZE + 'px';
+
+  const compositeCanvas = document.getElementById('composite');
+  compositeCanvas.width = OUTPUT_SIZE;
+  compositeCanvas.height = OUTPUT_SIZE;
+  const compositeCtx = compositeCanvas.getContext('2d');
+
+  let bgReady = false, treeReady = false;
+
+  const bgAnim = lottie.loadAnimation({
+    container: document.getElementById('bgWrap'),
+    renderer: 'canvas', loop: false, autoplay: false,
+    path: '/projects/tree-growth/scene-1/lottie.json',
+    rendererSettings: { clearCanvas: true, preserveAspectRatio: 'xMidYMid meet' },
+  });
+  const treeAnim = lottie.loadAnimation({
+    container: document.getElementById('treeWrap'),
+    renderer: 'canvas', loop: false, autoplay: false,
+    path: '/_test_leaf_sway_tree05_healthy.json',
+    rendererSettings: { clearCanvas: true, preserveAspectRatio: 'xMidYMid meet' },
+  });
+
+  bgAnim.addEventListener('DOMLoaded', () => { bgReady = true; log('bg data_ready'); maybeReady(); });
+  treeAnim.addEventListener('DOMLoaded', () => { treeReady = true; log('tree data_ready'); maybeReady(); });
+  bgAnim.addEventListener('data_failed', () => log('bg data_failed'));
+  treeAnim.addEventListener('data_failed', () => log('tree data_failed'));
+
+  window.exportStatus = 'loading';
+  window.exportProgress = 0;
+
+  function maybeReady() {
+    if (bgReady && treeReady) {
+      log('both ready. Call window.runExport() to start.');
+      window.exportStatus = 'ready';
+    }
+  }
+
+  window.runExport = async function () {
+    const bgCanvasEl = document.querySelector('#bgWrap canvas');
+    const treeCanvasEl = document.querySelector('#treeWrap canvas');
+    window.exportStatus = 'capturing';
+
+    const outputFrameCount = Math.round((SOURCE_TOTAL_FRAMES / SOURCE_FPS) * EXPORT_FPS);
+    const posts = [];
+    for (let i = 0; i < outputFrameCount; i++) {
+      const sourceFrame = Math.min(SOURCE_TOTAL_FRAMES - 0.001, i * STEP);
+      bgAnim.goToAndStop(sourceFrame, true);
+      treeAnim.goToAndStop(sourceFrame, true);
+      compositeCtx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      compositeCtx.drawImage(bgCanvasEl, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      compositeCtx.drawImage(treeCanvasEl, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+      const dataUrl = compositeCanvas.toDataURL('image/png');
+      const name = 'frame-' + String(i).padStart(4, '0') + '.png';
+      posts.push(fetch(FRAME_SERVER + '/frame/' + name, { method: 'POST', body: dataUrl }));
+      window.exportProgress = Math.round((i / outputFrameCount) * 100);
+    }
+    log('all ' + outputFrameCount + ' frames drawn + POSTed, waiting for uploads to finish...');
+    window.exportStatus = 'uploading';
+    await Promise.all(posts);
+    log('all uploads confirmed done.');
+    window.exportStatus = 'done';
+    return 'done: ' + outputFrameCount + ' frames at ' + EXPORT_FPS + 'fps';
+  };
+</script>
+</body></html>

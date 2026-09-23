@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+.wrangler
+.output
+.vercel
+.netlify
+.vinxi
+app.config.timestamp_*.js
+
+# exports: regenerate via `npm run bundle` (my-animation/) instead of committing
+my-animation/exports/
+
+# environment
+.env
+.env*.local
+
+# IDEs and editors
+.idea/
+.project
+.classpath
+*.launch
+.settings/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# large runtime asset fetched by postinstall
+canvaskit.wasm
