@@ -29,7 +29,11 @@ const server = http.createServer((req, res) => {
     req.on("data", (chunk) => { body += chunk; });
     req.on("end", () => {
       const b64 = body.replace(/^data:image\/png;base64,/, "");
-      fs.writeFileSync(path.join(OUT_DIR, name), Buffer.from(b64, "base64"));
+      // name may include a subfolder (e.g. "tree-01-healthy/frame-0000.png") so
+      // one server run can collect several stages' frames side by side
+      const dest = path.join(OUT_DIR, name);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, Buffer.from(b64, "base64"));
       received++;
       res.writeHead(200);
       res.end("ok");

@@ -16,8 +16,8 @@ const STAGE_DIR = path.join(ROOT, "exports", "bundle", BUNDLE_NAME);
 const ZIP_PATH = path.join(ROOT, "exports", "bundle", `${BUNDLE_NAME}.zip`);
 
 // ---------- stage manifest: add a new object here for every future
-// completed stage (e.g. tree_05 healthy/withered) and everything below
-// (file copy, README, preview page) updates automatically. ----------
+// completed stage and everything below (file copy, preview mp4 pick-up,
+// README, preview page) updates automatically. ----------
 const STAGES = [
   {
     key: "background",
@@ -67,7 +67,6 @@ const STAGES = [
     fps: 30, frames: 900, size: "1000x1000",
     playback: "loop",
     files: [{ src: "public/_test_leaf_sway_full.json", dest: "tree-04-small/healthy.json" }],
-    previewMp4: "exports/tree-composite-04.mp4",
   },
   {
     key: "tree-04-withered",
@@ -77,7 +76,6 @@ const STAGES = [
     steadyStart: 450,
     steadyEnd: 900,
     files: [{ src: "public/_test_leaf_sway_withered.json", dest: "tree-04-small/withered.json" }],
-    previewMp4: "exports/tree-composite-04-withered.mp4",
   },
   {
     key: "tree-05-healthy",
@@ -85,7 +83,6 @@ const STAGES = [
     fps: 30, frames: 900, size: "1000x1000",
     playback: "loop",
     files: [{ src: "public/_test_leaf_sway_tree05_healthy.json", dest: "tree-05-mature/healthy.json" }],
-    previewMp4: "exports/tree-composite-05-healthy.mp4",
   },
   {
     key: "tree-05-withered",
@@ -95,7 +92,6 @@ const STAGES = [
     steadyStart: 810,
     steadyEnd: 1110,
     files: [{ src: "public/_test_leaf_sway_tree05_withered.json", dest: "tree-05-mature/withered.json" }],
-    previewMp4: "exports/tree-composite-05-withered.mp4",
   },
 ];
 
@@ -121,10 +117,15 @@ for (const stage of STAGES) {
     const size = copyFile(f.src, f.dest);
     return { ...f, size };
   });
+  // each stage's preview video is picked up by convention from the tracked
+  // previews-mp4/<key>.mp4 (committed, unlike exports/, so the GitHub Pages
+  // build has them too). Regenerate with public/_export_frames_stage.html +
+  // scripts/frame-server.mjs + ffmpeg (see that page's header comment).
   let mp4Copied = null;
-  if (stage.previewMp4 && fs.existsSync(path.join(ROOT, stage.previewMp4))) {
+  const mp4Src = `previews-mp4/${stage.key}.mp4`;
+  if (fs.existsSync(path.join(ROOT, mp4Src))) {
     const destRel = `previews-mp4/${stage.key}.mp4`;
-    const size = copyFile(stage.previewMp4, destRel);
+    const size = copyFile(mp4Src, destRel);
     mp4Copied = { dest: destRel, size };
   }
   manifestForReadme.push({ ...stage, copiedFiles: copied, mp4Copied });
@@ -364,7 +365,7 @@ const readme = `# Tree Growth Animation Bundle
 
 - 所有動畫都是標準 Lottie/Bodymovin JSON，可以用 \`lottie-web\`(網頁)、\`lottie-react-native\`、After Effects Bodymovin 外掛等任何支援 Lottie 的播放器開啟。
 - \`preview/index.html\`：獨立、可直接雙擊在瀏覽器打開的預覽頁(內含 lottie-web CDN 連結，需要網路)，可以切換各階段疊加在背景上的效果，並且正確示範了枯萎樹「掉葉永久保留」的播放邏輯。
-- \`previews-mp4/\`(只有部分階段有)：對應的**單次播放**預覽影片，方便不方便架網頁環境時快速看效果。**這些影片不能設定循環播放**，只是給人看一次的，細節見下方各階段說明。
+- \`previews-mp4/\`：對應的**單次播放**預覽影片，方便不方便架網頁環境時快速看效果。**這些影片不能設定循環播放**，只是給人看一次的，細節見下方各階段說明。
 
 ## 各階段動畫
 
