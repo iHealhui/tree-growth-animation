@@ -32,13 +32,12 @@
   //   bgFrom          first background frame (default: `from` mod 900)
   // The background is always sampled modulo its own 900f loop.
   //
-  // Withered stages (play once, then loop a steady segment) get two videos,
-  // mirroring the Lottie playback rule: the full timeline (play once), then
-  //   ?from=<steadyStart>&segment=<steadyEnd-steadyStart>&bgFrom=<totalFrames mod 900>&out=<key>-loop
-  // which is one whole background cycle long, so it loops seamlessly AND starts
-  // on exactly the background frame the play-once video ends on.
+  // The bundle uses one video per stage (the whole timeline, looped -- for the
+  // withered 04/05 stages the leaves come back each cycle, an accepted
+  // trade-off). from/segment/bgFrom are for one-off renders and probes, e.g.
+  // lossless frames either side of a loop seam.
   //
-  // Full recipe for the bundle's previews-mp4/<stage key>[-loop].mp4:
+  // Full recipe for the bundle's previews-mp4/<stage key>.mp4:
   //   1. node scripts/frame-server.mjs exports/frames-all   (port 3032)
   //   2. per video, open this page via the vite dev server and call
   //      window.runExport() (resolves when every frame is uploaded)
