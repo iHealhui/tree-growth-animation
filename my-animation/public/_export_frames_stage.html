@@ -6,6 +6,7 @@
 <style>
   body { background:#111; color:#0f0; font-family: monospace; font-size: 13px; }
   #bgWrap, #treeWrap { position: absolute; left: -99999px; top: 0; }
+  #composite { display: none; }
 </style>
 </head><body>
 <pre id="log"></pre>
@@ -13,31 +14,51 @@
 <div id="treeWrap"></div>
 <canvas id="composite"></canvas>
 <script>
-  // Generic version of the per-stage _export_frames*.html pages:
-  //   _export_frames_stage.html?tree=/_test_seed.json&out=tree-01-healthy
-  // Renders the background + tree composite once through the TREE's whole
-  // timeline (read from its JSON, so the 1110f tree_05 withered works too --
-  // the background is sampled modulo its own 900f loop) and POSTs each frame
-  // to scripts/frame-server.mjs under the `out` subfolder.
+  // Renders the background + tree composite for one stage and POSTs each frame
+  // to scripts/frame-server.mjs under the `out` subfolder, for ffmpeg -> mp4.
   //
-  // Full recipe for the bundle's previews-mp4/<stage key>.mp4:
+  //   _export_frames_stage.html?tree=/_test_seed.json&out=tree-01-healthy
+  //
+  // Query params:
+  //   tree, out       required
+  //   size            output px (default 1000 = the Lottie canvas, fallback quality)
+  //   fps             output fps (default 30 = the source rate, so every source
+  //                   frame is rendered and loop seams line up exactly)
+  //   from            first tree frame (default 0)
+  //   segment         loop the tree over [from, from+segment) instead of running
+  //                   straight through -- for the withered stages' steady loop
+  //   frames          source frames to render (default: tree's whole timeline,
+  //                   or one 900f background cycle when `segment` is set)
+  //   bgFrom          first background frame (default: `from` mod 900)
+  // The background is always sampled modulo its own 900f loop.
+  //
+  // Withered stages (play once, then loop a steady segment) get two videos,
+  // mirroring the Lottie playback rule: the full timeline (play once), then
+  //   ?from=<steadyStart>&segment=<steadyEnd-steadyStart>&bgFrom=<totalFrames mod 900>&out=<key>-loop
+  // which is one whole background cycle long, so it loops seamlessly AND starts
+  // on exactly the background frame the play-once video ends on.
+  //
+  // Full recipe for the bundle's previews-mp4/<stage key>[-loop].mp4:
   //   1. node scripts/frame-server.mjs exports/frames-all   (port 3032)
-  //   2. per stage, open this page via the vite dev server with
-  //      out=<stage key from build-bundle.mjs> and call window.runExport()
-  //   3. per stage: ffmpeg -framerate 24 -i exports/frames-all/<key>/frame-%04d.png
-  //        -c:v libx264 -pix_fmt yuv420p -crf 18 -movflags +faststart previews-mp4/<key>.mp4
+  //   2. per video, open this page via the vite dev server and call
+  //      window.runExport() (resolves when every frame is uploaded)
+  //   3. per video: ffmpeg -framerate 30 -i exports/frames-all/<out>/frame-%04d.png
+  //        -c:v libx264 -pix_fmt yuv420p -crf 20 -movflags +faststart previews-mp4/<out>.mp4
+  //      (1000px frames are ~1MB each -- encode and delete each folder as you go)
   const log = (msg) => { document.getElementById('log').textContent += msg + "\n"; console.log(msg); };
   const params = new URLSearchParams(location.search);
   const TREE_PATH = params.get('tree');
   const OUT = params.get('out');
   if (!TREE_PATH || !OUT) throw new Error('need ?tree=<json path>&out=<subfolder>');
+  const num = (k, d) => (params.has(k) ? Number(params.get(k)) : d);
 
   const FRAME_SERVER = 'http://localhost:3032';
-  const OUTPUT_SIZE = 480;
-  const EXPORT_FPS = 24;
+  const OUTPUT_SIZE = num('size', 1000);
+  const EXPORT_FPS = num('fps', 30);
   const SOURCE_FPS = 30;
   const BG_LOOP_FRAMES = 900; // background's own master loop length
   const STEP = SOURCE_FPS / EXPORT_FPS;
+  const UPLOAD_BATCH = 8; // keep only a few full-size PNG data URLs in memory at once
 
   for (const id of ['bgWrap', 'treeWrap']) {
     document.getElementById(id).style.width = OUTPUT_SIZE + 'px';
@@ -79,24 +100,30 @@
     const bgCanvasEl = document.querySelector('#bgWrap canvas');
     const treeCanvasEl = document.querySelector('#treeWrap canvas');
     const treeTotalFrames = treeAnim.totalFrames;
+    const from = num('from', 0);
+    const segment = num('segment', 0);
+    const sourceFrames = num('frames', segment ? BG_LOOP_FRAMES : treeTotalFrames - from);
+    const bgFrom = num('bgFrom', from % BG_LOOP_FRAMES);
     window.exportStatus = 'capturing';
 
-    const outputFrameCount = Math.round((treeTotalFrames / SOURCE_FPS) * EXPORT_FPS);
-    const posts = [];
+    const outputFrameCount = Math.round((sourceFrames / SOURCE_FPS) * EXPORT_FPS);
+    let posts = [];
     for (let i = 0; i < outputFrameCount; i++) {
-      const treeSourceFrame = Math.min(treeTotalFrames - 0.001, i * STEP);
-      bgAnim.goToAndStop(treeSourceFrame % BG_LOOP_FRAMES, true);
-      treeAnim.goToAndStop(treeSourceFrame, true);
+      const f = i * STEP; // source frames since the start of this video
+      const treeFrame = segment ? from + (f % segment) : Math.min(treeTotalFrames - 0.001, from + f);
+      bgAnim.goToAndStop((bgFrom + f) % BG_LOOP_FRAMES, true);
+      treeAnim.goToAndStop(treeFrame, true);
       compositeCtx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
       compositeCtx.drawImage(bgCanvasEl, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
       compositeCtx.drawImage(treeCanvasEl, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
       const name = OUT + '/frame-' + String(i).padStart(4, '0') + '.png';
       posts.push(fetch(FRAME_SERVER + '/frame/' + name, { method: 'POST', body: compositeCanvas.toDataURL('image/png') }));
+      if (posts.length >= UPLOAD_BATCH) { await Promise.all(posts); posts = []; }
+      window.exportProgress = i + 1;
     }
-    window.exportStatus = 'uploading';
     await Promise.all(posts);
     window.exportStatus = 'done';
-    return OUT + ': ' + outputFrameCount + ' frames (' + treeTotalFrames + ' source frames) at ' + EXPORT_FPS + 'fps';
+    return OUT + ': ' + outputFrameCount + ' frames at ' + OUTPUT_SIZE + 'px ' + EXPORT_FPS + 'fps';
   };
 </script>
 </body></html>

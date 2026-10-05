@@ -16,8 +16,8 @@ const STAGE_DIR = path.join(ROOT, "exports", "bundle", BUNDLE_NAME);
 const ZIP_PATH = path.join(ROOT, "exports", "bundle", `${BUNDLE_NAME}.zip`);
 // what the previews-mp4/ videos are, shown on the preview page and in the
 // README -- keep in sync with the ffmpeg recipe in public/_export_frames_stage.html
-const MP4_SPEC = "480×480、24fps、H.264 (CRF 18)";
-const MP4_PURPOSE = "僅供快速預覽，畫質低於 Lottie 原尺寸 1000×1000，不是正式交付檔";
+const MP4_SPEC = "1000×1000、30fps、H.264 (CRF 20)，已含背景";
+const MP4_PURPOSE = "備用方案：Lottie JSON 無法播放時改播這些影片，尺寸與 Lottie 原畫布相同";
 
 // ---------- stage manifest: add a new object here for every future
 // completed stage and everything below (file copy, preview mp4 pick-up,
@@ -121,19 +121,25 @@ for (const stage of STAGES) {
     const size = copyFile(f.src, f.dest);
     return { ...f, size };
   });
-  // each stage's preview video is picked up by convention from the tracked
+  // each stage's fallback video is picked up by convention from the tracked
   // previews-mp4/<key>.mp4 (committed, unlike exports/, so the GitHub Pages
-  // build has them too). Regenerate with public/_export_frames_stage.html +
-  // scripts/frame-server.mjs + ffmpeg (see that page's header comment).
-  let mp4Copied = null;
-  const mp4Src = `previews-mp4/${stage.key}.mp4`;
-  if (fs.existsSync(path.join(ROOT, mp4Src))) {
-    const destRel = `previews-mp4/${stage.key}.mp4`;
-    const size = copyFile(mp4Src, destRel);
-    mp4Copied = { dest: destRel, size };
+  // build has them too), plus previews-mp4/<key>-loop.mp4 for play-once
+  // stages (the steady segment to loop after the play-once video ends).
+  // Regenerate with public/_export_frames_stage.html + scripts/frame-server.mjs
+  // + ffmpeg (see that page's header comment).
+  const copyMp4 = (name) => {
+    const src = `previews-mp4/${name}.mp4`;
+    if (!fs.existsSync(path.join(ROOT, src))) return null;
+    return { dest: src, size: copyFile(src, src) };
+  };
+  const mp4Copied = copyMp4(stage.key);
+  const mp4LoopCopied = stage.playback === "loop" ? null : copyMp4(`${stage.key}-loop`);
+  if (mp4Copied && stage.playback !== "loop" && !mp4LoopCopied) {
+    throw new Error(`${stage.key}: has a play-once mp4 but no ${stage.key}-loop.mp4 to continue with`);
   }
-  manifestForReadme.push({ ...stage, copiedFiles: copied, mp4Copied });
-  console.log("Staged:", stage.key, "->", copied.map((c) => c.dest).join(", "), mp4Copied ? `+ ${mp4Copied.dest}` : "");
+  manifestForReadme.push({ ...stage, copiedFiles: copied, mp4Copied, mp4LoopCopied });
+  console.log("Staged:", stage.key, "->", copied.map((c) => c.dest).join(", "),
+    [mp4Copied, mp4LoopCopied].filter(Boolean).map((m) => "+ " + m.dest).join(" "));
 }
 
 // ---------- 2. preview/index.html: self-contained gallery, correct
@@ -147,7 +153,8 @@ const treeStagesJs = JSON.stringify(
     steadyStart: s.steadyStart, steadyEnd: s.steadyEnd,
     jsonDownload: s.files[0].dest,
     jsonDownloadName: `${s.key}.json`,
-    mp4Download: s.mp4Copied ? `previews-mp4/${s.key}.mp4` : null,
+    mp4Download: s.mp4Copied ? s.mp4Copied.dest : null,
+    mp4LoopDownload: s.mp4LoopCopied ? s.mp4LoopCopied.dest : null,
   })),
   null, 2
 );
@@ -177,6 +184,8 @@ const previewHtml = `<!DOCTYPE html>
   }
   .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
   #stateLabel { font-size: 12px; color: #8f8; }
+  .controls label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  #video-layer { display: none; object-fit: contain; }
   .downloads { display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: #1a1a1a; border-bottom: 1px solid #333; flex-wrap: wrap; }
   .downloads a { color: #eee; background: #2a4a2a; border: 1px solid #4a7a4a; border-radius: 4px; padding: 6px 12px; font-size: 13px; text-decoration: none; }
   .downloads a:hover { background: #3a6a3a; }
@@ -196,13 +205,15 @@ const previewHtml = `<!DOCTYPE html>
   <span>疊加圖層:</span>
   <button data-stage="none" class="active">無</button>
 ${buttonsHtml}
+  <label><input type="checkbox" id="useMp4"> 改用 MP4 備用方案播放</label>
   <span id="stateLabel"></span>
 </div>
 
 <div class="downloads">
   <span>下載:</span>
   <a id="dlJson" class="disabled" download>目前階段的 Lottie JSON</a>
-  <a id="dlMp4" class="disabled" download>目前階段的 MP4 預覽</a>
+  <a id="dlMp4" class="disabled" download>目前階段的 MP4 (備用)</a>
+  <a id="dlMp4Loop" class="disabled" download>MP4 循環段 (04/05 枯萎)</a>
   <div class="sep"></div>
   <a id="dlZip" href="download/${BUNDLE_NAME}.zip" download="${BUNDLE_NAME}.zip">下載完整交付包 (.zip)</a>
   <span class="note">MP4 規格：${MP4_SPEC}，${MP4_PURPOSE}。</span>
@@ -212,6 +223,7 @@ ${buttonsHtml}
   <div class="stage">
     <div id="bg-layer" class="layer"></div>
     <div id="tree-layer" class="layer"></div>
+    <video id="video-layer" class="layer" muted playsinline></video>
   </div>
 </div>
 
@@ -226,34 +238,65 @@ ${buttonsHtml}
 
   const dlJson = document.getElementById('dlJson');
   const dlMp4 = document.getElementById('dlMp4');
+  const dlMp4Loop = document.getElementById('dlMp4Loop');
+  function setLink(a, href, name) {
+    if (href) { a.href = href; a.download = name; a.classList.remove('disabled'); }
+    else { a.classList.add('disabled'); a.removeAttribute('href'); }
+  }
   function updateDownloadLinks(stage) {
-    if (!stage) {
-      dlJson.classList.add('disabled'); dlJson.removeAttribute('href');
-      dlMp4.classList.add('disabled'); dlMp4.removeAttribute('href');
-      return;
-    }
-    dlJson.href = stage.jsonDownload;
-    dlJson.download = stage.jsonDownloadName;
-    dlJson.classList.remove('disabled');
-    if (stage.mp4Download) {
-      dlMp4.href = stage.mp4Download;
-      dlMp4.download = stage.key + '.mp4';
-      dlMp4.classList.remove('disabled');
-    } else {
-      dlMp4.classList.add('disabled'); dlMp4.removeAttribute('href');
-    }
+    setLink(dlJson, stage && stage.jsonDownload, stage && stage.jsonDownloadName);
+    setLink(dlMp4, stage && stage.mp4Download, stage && stage.key + '.mp4');
+    setLink(dlMp4Loop, stage && stage.mp4LoopDownload, stage && stage.key + '-loop.mp4');
+  }
+
+  const useMp4 = document.getElementById('useMp4');
+  const video = document.getElementById('video-layer');
+  const lottieLayers = [document.getElementById('bg-layer'), document.getElementById('tree-layer')];
+  function showVideo(on) {
+    video.style.display = on ? 'block' : 'none';
+    lottieLayers.forEach((el) => { el.style.visibility = on ? 'hidden' : 'visible'; });
   }
 
   let treeAnim = null;
   function clearTree() {
     if (treeAnim) { treeAnim.destroy(); treeAnim = null; }
     document.getElementById('tree-layer').innerHTML = '';
+    video.pause(); video.onended = null; video.removeAttribute('src'); video.load();
+    showVideo(false);
     stateLabel.textContent = '';
   }
 
+  // MP4 fallback: the videos already include the background, so the Lottie
+  // layers are hidden. Same playback rule as the Lottie version: loop stages
+  // loop one video; play-once stages play the fall once, then switch to the
+  // -loop video (which starts on the very frame the first one ends on) and
+  // loop that forever.
+  function loadStageVideo(stage) {
+    showVideo(true);
+    video.src = stage.mp4Download;
+    if (stage.playback === 'loop') {
+      video.loop = true;
+      stateLabel.textContent = 'MP4 備用方案:循環播放中';
+    } else {
+      video.loop = false;
+      stateLabel.textContent = 'MP4 備用方案:播放中:完整序列(葉子依序掉落)';
+      video.onended = () => {
+        video.onended = null;
+        video.src = stage.mp4LoopDownload;
+        video.loop = true;
+        video.play();
+        stateLabel.textContent = 'MP4 備用方案:葉子已掉落並永久保留(改播循環段影片)';
+      };
+    }
+    video.play();
+  }
+
+  let currentStage = null;
   function loadStage(stage) {
     clearTree();
+    currentStage = stage;
     updateDownloadLinks(stage);
+    if (useMp4.checked && stage.mp4Download) { loadStageVideo(stage); return; }
     if (stage.playback === 'loop') {
       treeAnim = lottie.loadAnimation({
         container: document.getElementById('tree-layer'),
@@ -289,10 +332,11 @@ ${buttonsHtml}
     btn.addEventListener('click', () => {
       setActive(btn);
       const key = btn.dataset.stage;
-      if (key === 'none') { clearTree(); updateDownloadLinks(null); return; }
+      if (key === 'none') { clearTree(); currentStage = null; updateDownloadLinks(null); return; }
       loadStage(TREE_STAGES.find((s) => s.key === key));
     });
   });
+  useMp4.addEventListener('change', () => { if (currentStage) loadStage(currentStage); });
 
   // default to the first tree stage
   const firstBtn = document.querySelector('.controls button[data-stage="${treeStages[0]?.key ?? "none"}"]');
@@ -333,10 +377,10 @@ function fmtBytes(n) {
 
 const readmeSections = manifestForReadme.map((s) => {
   const fileLines = s.copiedFiles.map((f) => `  - \`${f.dest}\` (${fmtBytes(f.size)})`).join("\n");
-  const mp4Loop = s.playback === "loop"
-    ? "剛好一輪循環,可以循環播放"
-    : "完整播放一次掉葉過程,**不可循環播放**(一循環葉子會重新掉一次)";
-  const mp4Line = s.mp4Copied ? `\n  - \`${s.mp4Copied.dest}\` (${fmtBytes(s.mp4Copied.size)}, ${MP4_SPEC}, ${mp4Loop}; 純預覽用,不是最終效果)` : "";
+  const mp4Line = !s.mp4Copied ? "" : s.playback === "loop"
+    ? `\n  - \`${s.mp4Copied.dest}\` (${fmtBytes(s.mp4Copied.size)}, MP4 備用, 剛好一輪, 直接循環播放)`
+    : `\n  - \`${s.mp4Copied.dest}\` (${fmtBytes(s.mp4Copied.size)}, MP4 備用, 掉葉過程, **只播一次**)` +
+      (s.mp4LoopCopied ? `\n  - \`${s.mp4LoopCopied.dest}\` (${fmtBytes(s.mp4LoopCopied.size)}, MP4 備用, 掉葉後的循環段, 上一支播完後接著循環播放)` : "");
   let playbackNote;
   if (s.playback === "loop") {
     playbackNote = `播放方式: 簡單無限循環 (\`loop: true\`)，${s.frames} frame 首尾已對齊，直接循環不會有跳動。`;
@@ -373,8 +417,37 @@ const readme = `# Tree Growth Animation Bundle
 ## 這份交付包裡有什麼
 
 - 所有動畫都是標準 Lottie/Bodymovin JSON，可以用 \`lottie-web\`(網頁)、\`lottie-react-native\`、After Effects Bodymovin 外掛等任何支援 Lottie 的播放器開啟。
-- \`preview/index.html\`：獨立、可直接雙擊在瀏覽器打開的預覽頁(內含 lottie-web CDN 連結，需要網路)，可以切換各階段疊加在背景上的效果，並且正確示範了枯萎樹「掉葉永久保留」的播放邏輯。
-- \`previews-mp4/\`：每個階段的預覽影片(${MP4_SPEC})，方便不方便架網頁環境時快速看效果。${MP4_PURPOSE}。一般階段的影片剛好是一輪循環；04、05 枯萎是完整播放一次掉葉過程，**不可循環播放**。細節見下方各階段說明。
+- \`preview/index.html\`：獨立、可直接雙擊在瀏覽器打開的預覽頁(內含 lottie-web CDN 連結，需要網路)，可以切換各階段疊加在背景上的效果，並且正確示範了枯萎樹「掉葉永久保留」的播放邏輯。勾選「改用 MP4 備用方案播放」可以看備用影片的實際效果。
+- \`previews-mp4/\`：每個階段的 MP4 備用影片(${MP4_SPEC})。${MP4_PURPOSE}。用法見下方「MP4 備用方案」。
+
+## MP4 備用方案
+
+正式顯示請用 Lottie JSON；**JSON 無法播放時**(例如播放器不支援、載入失敗)才改播 \`previews-mp4/\` 裡的影片。
+
+- 影片已經把背景和樹合成在一起，所以只要一個 \`<video>\`，不用另外疊背景。
+- 一般階段：一支影片，剛好一輪，直接循環播放(\`loop\`)。
+- 04、05 枯萎：兩支影片，照 Lottie 版「掉葉後永久保留」的邏輯接——先播 \`<階段>.mp4\` 一次(掉葉過程)，播完再換成 \`<階段>-loop.mp4\` 並一直循環。循環段的第一格就是前一支的最後一格，換片時不會跳。不可以直接循環第一支，否則葉子會重新掉一次。
+- 影片頭尾的循環接縫經過檢查：動畫本身是無縫的，影片壓縮在接縫處造成的差異跟影片中段本來就有的關鍵影格差不多，播放時看不出來。
+
+\`\`\`js
+// 一般階段
+video.src = 'previews-mp4/tree-01-healthy.mp4';
+video.loop = true;
+video.play();
+
+// 04、05 枯萎：先播一次，再接循環段
+video.src = 'previews-mp4/tree-04-withered.mp4';
+video.loop = false;
+video.onended = () => {
+  video.onended = null;
+  video.src = 'previews-mp4/tree-04-withered-loop.mp4';
+  video.loop = true;
+  video.play();
+};
+video.play();
+\`\`\`
+
+\`<video>\` 請加上 \`muted playsinline\`，手機瀏覽器才允許自動播放。
 
 ## 各階段動畫
 
