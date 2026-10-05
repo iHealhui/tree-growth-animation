@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="_圖層_1" data-name="圖層 1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1000 1000">
+  <defs>
+    <linearGradient id="_未命名漸層_279" data-name="未命名漸層 279" x1="601.519" y1="463.462" x2="517.283" y2="593.971" gradientUnits="userSpaceOnUse">
+      <stop offset=".086" stop-color="#c6cd08"/>
+      <stop offset="1" stop-color="#057a33"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_279-2" data-name="未命名漸層 279" x1="610.313" y1="463.242" x2="561.639" y2="538.654" xlink:href="#_未命名漸層_279"/>
+    <linearGradient id="_未命名漸層_4" data-name="未命名漸層 4" x1="405.26" y1="437.759" x2="500.349" y2="514.08" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c6cd08"/>
+      <stop offset=".109" stop-color="#bfca09"/>
+      <stop offset=".26" stop-color="#adc20d"/>
+      <stop offset=".437" stop-color="#8fb514"/>
+      <stop offset=".632" stop-color="#66a31d"/>
+      <stop offset=".841" stop-color="#328d28"/>
+      <stop offset="1" stop-color="#057a33"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_12" data-name="未命名漸層 12" x1="386.52" y1="452.613" x2="478.92" y2="495.7" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c6cd08"/>
+      <stop offset="1" stop-color="#057a33"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_3" data-name="未命名漸層 3" x1="505.544" y1="815.513" x2="498.479" y2="430.932" gradientUnits="userSpaceOnUse">
+      <stop offset=".076" stop-color="#8a4f17"/>
+      <stop offset=".303" stop-color="#9b722d"/>
+      <stop offset=".583" stop-color="#479032"/>
+      <stop offset="1" stop-color="#4e9a31"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_168" data-name="未命名漸層 168" x1="405.524" y1="569.918" x2="511.132" y2="623.774" gradientUnits="userSpaceOnUse">
+      <stop offset=".119" stop-color="#c6cd08"/>
+      <stop offset=".761" stop-color="#1c842e"/>
+      <stop offset=".935" stop-color="#658530"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_12-2" data-name="未命名漸層 12" x1="401.469" y1="578.497" x2="478.706" y2="614.514" xlink:href="#_未命名漸層_12"/>
+    <linearGradient id="_未命名漸層_274" data-name="未命名漸層 274" x1="503.805" y1="448.528" x2="503.855" y2="440.208" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4d9931"/>
+      <stop offset=".221" stop-color="#298931"/>
+      <stop offset=".43" stop-color="#0e7e32"/>
+      <stop offset=".553" stop-color="#057a33"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_2" data-name="未命名漸層 2" x1="529.53" y1="346.741" x2="505.255" y2="439.025" gradientUnits="userSpaceOnUse">
+      <stop offset=".286" stop-color="#c6cd08"/>
+      <stop offset="1" stop-color="#057a33"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_12-3" data-name="未命名漸層 12" x1="539.606" y1="349.392" x2="515.331" y2="441.675" xlink:href="#_未命名漸層_12"/>
+    <linearGradient id="_未命名漸層_189" data-name="未命名漸層 189" x1="566.596" y1="566.057" x2="507.969" y2="661.488" gradientUnits="userSpaceOnUse">
+      <stop offset=".106" stop-color="#c6cd08"/>
+      <stop offset=".559" stop-color="#66a41d"/>
+      <stop offset=".947" stop-color="#777f2f"/>
+    </linearGradient>
+    <linearGradient id="_未命名漸層_12-4" data-name="未命名漸層 12" x1="570.34" y1="570.462" x2="543.695" y2="613.833" xlink:href="#_未命名漸層_12"/>
+  </defs>
+  <path id="leaf_03_base" data-leaf-group="leaf_03" d="M504.934,579.345l-.391-25.826s12.717-27.196,32.87-36.196c0,0,4.109-24.065,18.196-36.783,14.087-12.717,42.652-29.152,75.522-11.935,0,0-3.326,28.37-29.152,45.391s-45.978,11.935-60.457,7.826c0,0-29.348,13.891-36.587,57.522Z" fill="url(#_未命名漸層_279)"/>
+  <path id="leaf_03_half" data-leaf-group="leaf_03" d="M541.521,521.823c14.478,4.109,34.63,9.196,60.457-7.826,25.826-17.022,29.152-45.391,29.152-45.391,0,0-29.031,5.827-54.303,23.611-17.609,12.391-35.305,29.606-35.305,29.606Z" fill="url(#_未命名漸層_279-2)"/>
+  <path id="leaf_02_base" data-leaf-group="leaf_02" d="M393.706,437.204s1.174,28.174,23.087,46.174,47.739,17.217,62.217,12.13c0,0,18.196,13.761,22.37,41.413l.522-21.978s-5.739-13.826-19.043-21.913c0,0,1.043-16.174-8.348-31.826-9.391-15.652-39.783-41.217-80.804-24Z" fill="url(#_未命名漸層_4)"/>
+  <path id="leaf_02_half" data-leaf-group="leaf_02" d="M393.706,437.204s1.174,28.174,23.087,46.174c21.913,18,47.739,17.217,62.217,12.13,0,0-15.258-19.905-35.488-32.9-20.23-12.994-49.816-25.405-49.816-25.405Z" fill="url(#_未命名漸層_12)"/>
+  <path id="trunk_main" d="M496.325,816.492s8.821,3.587,18.473-.065l-5.087-144.489-1.402-50.576-.783-51.13-.571-17.951s-2.022-70.402-1.337-99.652c.13-5.544-.033-22.37-.033-22.37l-3.261-.065-.457,20.348-1.696,62.12-.261,17.087-.082,91.06.016,15.457-3.522,180.228Z" fill="url(#_未命名漸層_3)"/>
+  <path id="leaf_04_base" data-leaf-group="leaf_04" d="M476.369,588.9c-10.467-16.272-32.087-29.348-55.174-24.261-4.248.936-13.231,3.44-16.304,6.522-.507,2.162,3.402,11.891,4.304,13.957,3.636,8.321,10.293,15.05,17.512,20.495,12.987,10.011,35.999,13.581,53.999,4.613,9.213,5.02,15.978,11.772,21.554,30.946v-17.511c-3.424-7.826-19.761-17.12-19.761-17.12,0,0-2.875-12.581-6.13-17.641Z" fill="url(#_未命名漸層_168)"/>
+  <path id="leaf_04_half" data-leaf-group="leaf_04" d="M404.89,571.16c-.507,2.162,3.402,11.891,4.304,13.956,3.636,8.321,10.293,15.05,17.512,20.495,12.988,10.011,35.999,13.581,53.999,4.613,0,0-11.217-16.141-33.717-26.902s-42.098-12.163-42.098-12.163Z" fill="url(#_未命名漸層_12-2)"/>
+  <polygon id="leaf_01_stalk" data-leaf-group="leaf_01" points="501.914 448.54 505.654 448.42 505.739 441.394 502.087 439.065 501.914 448.54" fill="url(#_未命名漸層_274)"/>
+  <path id="leaf_01_base" data-leaf-group="leaf_01" d="M533.042,342.247s-16.435.522-32.087,26.609c-15.652,26.087-12.783,51.783,2.87,73.565,0,0,16.557-1.747,29.739-24.391,24.848-42.685-.522-75.783-.522-75.783Z" fill="url(#_未命名漸層_2)"/>
+  <path id="leaf_01_half" data-leaf-group="leaf_01" d="M533.042,342.247s-11.9,24.839-19.477,48.622c-4.696,14.739-9.74,51.552-9.74,51.552,0,0,16.557-1.747,29.739-24.391,24.848-42.685-.522-75.783-.522-75.783Z" fill="url(#_未命名漸層_12-3)"/>
+  <path id="leaf_05_base" data-leaf-group="leaf_05" d="M506.14,672.15v-19.957c3.75-11.087,7.891-20.348,25.418-40.353,0,0-.147-11.234,2.788-19.255,2.935-8.022,15.652-22.304,34.435-21.326,0,0,3.913,16.63-8.217,30.326-12.13,13.696-22.842,11.576-26.364,11.772,0,0-22.973,27.424-28.06,58.793Z" fill="url(#_未命名漸層_189)"/>
+  <path id="leaf_05_half" data-leaf-group="leaf_05" d="M568.782,571.258s-10.546,6.377-19.608,18.785c-8.478,11.609-14.974,23.313-14.974,23.313,3.522-.196,14.234,1.924,26.364-11.772s8.218-30.326,8.218-30.326Z" fill="url(#_未命名漸層_12-4)"/>
+</svg>
