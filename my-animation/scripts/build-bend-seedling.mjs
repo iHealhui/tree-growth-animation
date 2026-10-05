@@ -74,7 +74,14 @@ for (const [name, s] of Object.entries(STATES)) {
   }
 }
 
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+const lcm = (...xs) => xs.reduce((a, b) => (a * b) / gcd(a, b));
+
 function buildState(stateName, cfg) {
+// the whole motion repeats when the bend and every leaf rhythm line up again
+const CYCLE = lcm(cfg.bend.period, ...(cfg.leaves.mode === "none" ? [] : [cfg.leaves.period]),
+  ...(cfg.leaves.mode === "follow" ? [cfg.leaves.swayPeriod] : []));
+if (OP % CYCLE !== 0 || CYCLE % cfg.sampleStep !== 0) throw new Error(stateName + ": CYCLE " + CYCLE + " must divide OP and be a multiple of sampleStep");
 const svgText = fs.readFileSync(cfg.src, "utf8");
 const defsEnd = svgText.indexOf("</defs>") + "</defs>".length;
 const defsText = svgText.slice(0, defsEnd);
@@ -445,7 +452,7 @@ function bendContour(c, map) {
 const LINEAR_O = { x: [0.333], y: [0.333] };
 const LINEAR_I = { x: [0.667], y: [0.667] };
 const SAMPLE_TIMES = [];
-for (let t = 0; t <= OP; t += cfg.sampleStep) SAMPLE_TIMES.push(t);
+for (let t = 0; t <= CYCLE; t += cfg.sampleStep) SAMPLE_TIMES.push(t);
 const BEND_MAPS = SAMPLE_TIMES.map((t) => makeBendMap(t));
 
 function animatedAt(times, values) {
@@ -472,7 +479,7 @@ function leafLayerTransform(el) {
   ks.a = pivot;
   ks.p = JSON.parse(JSON.stringify(pivot));
   const times = [];
-  for (let t = 0; t <= OP; t += SWAY_STEP) times.push(t);
+  for (let t = 0; t <= CYCLE; t += SWAY_STEP) times.push(t);
   ks.r = animatedAt(times, times.map((t) => [swayDeg * Math.sin(2 * Math.PI * (t / swayPeriod + leaf.phase))]));
   return ks;
 }
@@ -510,16 +517,26 @@ function shapeItemFor(el) {
 const orderedElements = allElements.slice().reverse(); // topmost-in-SVG first
 const layers = orderedElements.map((el, n) => ({
   ddd: 0, ty: 4, nm: el.id, sr: 1, ks: leafLayerTransform(el), ao: 0,
-  ip: 0, op: OP, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
+  ip: 0, op: CYCLE, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
 }));
 
 const b = cfg.bend, l = cfg.leaves;
+// The motion repeats exactly every CYCLE frames, so only one cycle is stored
+// (in a precomp) and copies of it are laid end to end to fill the 30s
+// timeline -- the file shrinks by OP / CYCLE with no visible change.
+function cycleLayers() {
+  return Array.from({ length: OP / CYCLE }, (_, k) => ({
+    ddd: 0, ty: 0, nm: "cycle-" + (k + 1), refId: "cycle", sr: 1, ks: baseLayerTransform(), ao: 0,
+    w: CANVAS_W, h: CANVAS_H, ip: k * CYCLE, op: (k + 1) * CYCLE, st: k * CYCLE, ind: k + 1,
+  }));
+}
+
 const lottie = {
   v: "5.7.0", fr: FPS, ip: 0, op: OP, w: CANVAS_W, h: CANVAS_H,
   nm: "Seedling " + stateName + " - Bend (" + b.amplitudeDeg + "deg swing, " + b.centreDeg + "deg centre, " +
     b.period + "f period, " + b.lag + "f lag) + leaf " + l.mode + " (" + l.deg + "deg, " + l.period + "f" +
     (l.mode === "follow" ? ", " + l.delay + "f late, flutter " + l.swayDeg + "deg/" + l.swayPeriod + "f" : "") + ")",
-  assets: [], layers,
+  assets: [{ id: "cycle", nm: "one motion cycle (" + CYCLE + "f)", layers }], layers: cycleLayers(),
 };
 
 fs.mkdirSync(path.dirname(cfg.out), { recursive: true });

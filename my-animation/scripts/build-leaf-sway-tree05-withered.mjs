@@ -503,5 +503,8 @@ const lottie = {
 };
 
 fs.mkdirSync(path.dirname(OUT_JSON), { recursive: true });
-fs.writeFileSync(OUT_JSON, JSON.stringify(lottie, null, 2));
+// minified (was pretty-printed -- ~80% of the file was indentation). Numbers
+// are left unrounded: rounding to 3 decimals visibly shifted ~200 pixels on
+// tree_04 healthy, so it isn't worth the extra ~15%.
+fs.writeFileSync(OUT_JSON, JSON.stringify(lottie));
 console.log("\nWrote", OUT_JSON, "| layers:", layers.length);

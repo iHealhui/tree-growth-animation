@@ -58,6 +58,11 @@ if (OP % DROOP_PERIOD !== 0) throw new Error("DROOP_PERIOD must divide OP for a 
 const SAMPLE_STEP = 3; // frames between shape keyframes
 if (OP % BEND_PERIOD !== 0) throw new Error("BEND_PERIOD must divide OP for a seamless loop");
 if (OP % SAMPLE_STEP !== 0) throw new Error("SAMPLE_STEP must divide OP");
+const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+const lcm = (...xs) => xs.reduce((a, b) => (a * b) / gcd(a, b));
+// the whole motion repeats when both the bend and the leaf droop line up again
+const CYCLE = lcm(BEND_PERIOD, DROOP_PERIOD);
+if (OP % CYCLE !== 0 || CYCLE % SAMPLE_STEP !== 0) throw new Error("CYCLE must divide OP and be a multiple of SAMPLE_STEP");
 
 const svgText = fs.readFileSync(SRC, "utf8");
 const defsEnd = svgText.indexOf("</defs>") + "</defs>".length;
@@ -395,7 +400,7 @@ function bendContour(c, map) {
 const LINEAR_O = { x: [0.333], y: [0.333] };
 const LINEAR_I = { x: [0.667], y: [0.667] };
 const SAMPLE_TIMES = [];
-for (let t = 0; t <= OP; t += SAMPLE_STEP) SAMPLE_TIMES.push(t);
+for (let t = 0; t <= CYCLE; t += SAMPLE_STEP) SAMPLE_TIMES.push(t);
 const BEND_MAPS = SAMPLE_TIMES.map((t) => makeBendMap(t));
 
 function animated(values) {
@@ -437,13 +442,23 @@ function shapeItemFor(el) {
 const orderedElements = allElements.slice().reverse(); // topmost-in-SVG first
 const layers = orderedElements.map((el, n) => ({
   ddd: 0, ty: 4, nm: el.id, sr: 1, ks: baseLayerTransform(), ao: 0,
-  ip: 0, op: OP, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
+  ip: 0, op: CYCLE, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
 }));
+
+// The motion repeats exactly every CYCLE frames, so only one cycle is stored
+// (in a precomp) and copies of it are laid end to end to fill the 30s
+// timeline -- the file shrinks by OP / CYCLE with no visible change.
+function cycleLayers() {
+  return Array.from({ length: OP / CYCLE }, (_, k) => ({
+    ddd: 0, ty: 0, nm: "cycle-" + (k + 1), refId: "cycle", sr: 1, ks: baseLayerTransform(), ao: 0,
+    w: CANVAS_W, h: CANVAS_H, ip: k * CYCLE, op: (k + 1) * CYCLE, st: k * CYCLE, ind: k + 1,
+  }));
+}
 
 const lottie = {
   v: "5.7.0", fr: FPS, ip: 0, op: OP, w: CANVAS_W, h: CANVAS_H,
   nm: "Sprout Withered - Bend (" + BEND_AMPLITUDE_DEG + "deg swing, " + BEND_CENTER_DEG + "deg centre, " + BEND_PERIOD + "f period, " + BEND_LAG + "f lag) + leaf droop (" + DROOP_DEG + "deg, " + DROOP_PERIOD + "f)",
-  assets: [], layers,
+  assets: [{ id: "cycle", nm: "one motion cycle (" + CYCLE + "f)", layers }], layers: cycleLayers(),
 };
 
 fs.mkdirSync(path.dirname(OUT_JSON), { recursive: true });
