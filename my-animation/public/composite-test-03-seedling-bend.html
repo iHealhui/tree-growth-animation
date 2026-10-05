@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>Composite Test - 03 Seedling Bend</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; background: #111; color: #eee; font-family: -apple-system, "Segoe UI", "Microsoft JhengHei", sans-serif; }
+  .info { padding: 12px 16px; font-size: 13px; line-height: 1.6; background: #1a1a1a; border-bottom: 1px solid #333; }
+  .info b { color: #ffd76b; }
+  .controls { display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: #1a1a1a; border-bottom: 1px solid #333; flex-wrap: wrap; }
+  button { background: #2a2a2a; color: #eee; border: 1px solid #444; border-radius: 4px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+  button:hover { background: #3a3a3a; }
+  label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  .stage-wrap { display: flex; justify-content: center; padding: 20px; overflow: hidden; }
+  .stage {
+    position: relative; width: 700px; height: 700px;
+    background: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%);
+    background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    background-color: #222; border: 1px solid #444;
+  }
+  .layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<div class="info">
+  合成測試:<b>tree-growth 背景</b>(1000x1000, 30s/900f 循環)+ <b>03 seedling bend(healthy / withered 可切換)</b>(1000x1000, 同樣 30s/900f 循環,模擬 CC Bend It:根部固定、整株沿弧線左右彎)疊在同一個畫布上。棋盤格代表透明區域。
+</div>
+
+<div class="controls">
+  <label><input type="checkbox" id="toggleBg" checked> 顯示背景</label>
+  <label><input type="checkbox" id="toggleTree" checked> 顯示 03 seedling</label>
+  <label><input type="radio" name="state" value="healthy" checked> 健康</label>
+  <label><input type="radio" name="state" value="withered"> 枯萎</label>
+  <button id="restartBoth">同步重播兩者</button>
+  <button id="playPause">暫停 / 播放</button>
+  <label>影格 <input type="range" id="scrub" min="0" max="899" value="0" style="width:260px"> <span id="frameNo">0</span></label>
+  <label><input type="checkbox" id="zoom"> 放大大樹苗</label>
+</div>
+
+<div class="stage-wrap">
+  <div class="stage">
+    <div id="bg-layer" class="layer"></div>
+    <div id="tree-layer" class="layer"></div>
+  </div>
+</div>
+
+<script>
+  const bgAnim = lottie.loadAnimation({
+    container: document.getElementById('bg-layer'),
+    renderer: 'svg', loop: true, autoplay: true,
+    path: '/projects/tree-growth/scene-1/lottie.json',
+  });
+
+  const TREE_PATHS = { healthy: '/_test_bend_seedling_healthy.json', withered: '/_test_bend_seedling_withered.json' };
+  let treeAnim;
+  function loadTree(state) {
+    if (treeAnim) treeAnim.destroy();
+    treeAnim = lottie.loadAnimation({
+      container: document.getElementById('tree-layer'),
+      renderer: 'svg', loop: true, autoplay: false,
+      path: TREE_PATHS[state],
+    });
+    // start in step with the background so the two loops stay aligned
+    treeAnim.addEventListener('DOMLoaded', () => {
+      treeAnim.goToAndStop(bgAnim.currentFrame, true);
+      if (!bgAnim.isPaused) treeAnim.play();
+    });
+  }
+  loadTree('healthy');
+  document.querySelectorAll('input[name=state]').forEach((r) =>
+    r.addEventListener('change', () => loadTree(r.value)));
+
+  document.getElementById('toggleBg').addEventListener('change', (e) => {
+    document.getElementById('bg-layer').style.visibility = e.target.checked ? 'visible' : 'hidden';
+  });
+  document.getElementById('toggleTree').addEventListener('change', (e) => {
+    document.getElementById('tree-layer').style.visibility = e.target.checked ? 'visible' : 'hidden';
+  });
+  document.getElementById('restartBoth').addEventListener('click', () => {
+    bgAnim.goToAndPlay(0, true);
+    treeAnim.goToAndPlay(0, true);
+  });
+  document.getElementById('playPause').addEventListener('click', () => {
+    [bgAnim, treeAnim].forEach((a) => (a.isPaused ? a.play() : a.pause()));
+  });
+  // scrubbing pauses both and seeks with a forced synchronous render
+  // (goToAndStop is reliable even when the tab is backgrounded)
+  const scrub = document.getElementById('scrub');
+  scrub.addEventListener('input', () => {
+    const f = Number(scrub.value);
+    bgAnim.goToAndStop(f, true);
+    treeAnim.goToAndStop(f, true);
+    document.getElementById('frameNo').textContent = f;
+  });
+  document.getElementById('zoom').addEventListener('change', (e) => {
+    // seedling spans roughly y 340-820 of the 1000x1000 canvas
+    document.querySelector('.stage').style.transform = e.target.checked ? 'scale(3)' : '';
+    document.querySelector('.stage').style.transformOrigin = '50% 58%';
+  });
+</script>
+
+</body>
+</html>

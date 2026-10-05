@@ -1,8 +1,7 @@
-// Assembles a clean, engineering-team-ready delivery bundle out of whichever
-// animation stages are done so far (currently: the shared background scene +
-// tree_04 small-tree healthy/withered), and zips it. Re-run any time a new
-// stage finishes -- just add an entry to STAGES below, nothing else in this
-// script needs to change.
+// Assembles a clean, engineering-team-ready delivery bundle out of the
+// finished animation stages (the shared background scene + tree stages 01-05),
+// and zips it. Re-run any time a stage changes; a new stage is just one more
+// entry in STAGES below, nothing else in this script needs to change.
 //
 // Output: exports/bundle/tree-growth-bundle-<YYYY-MM-DD>/  (staging folder)
 //         exports/bundle/tree-growth-bundle-<YYYY-MM-DD>.zip  (what you hand off)
@@ -26,6 +25,41 @@ const STAGES = [
     fps: 30, frames: 900, size: "1000x1000",
     playback: "loop",
     files: [{ src: "public/projects/tree-growth/scene-1/lottie.json", dest: "background/scene-1.json" }],
+  },
+  {
+    key: "tree-01-healthy",
+    label: "01 種子 - 健康狀態 (緩慢呼吸 + 小根輕擺;種子只有健康狀態)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_seed.json", dest: "tree-01-seed/healthy.json" }],
+  },
+  {
+    key: "tree-02-healthy",
+    label: "02 嫩芽 - 健康狀態 (整株弧形彎曲擺動)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_bend_sprout.json", dest: "tree-02-sprout/healthy.json" }],
+  },
+  {
+    key: "tree-02-withered",
+    label: "02 嫩芽 - 枯萎狀態 (較慢較小的彎曲 + 葉子緩慢下垂)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_bend_sprout_withered.json", dest: "tree-02-sprout/withered.json" }],
+  },
+  {
+    key: "tree-03-healthy",
+    label: "03 大樹苗 - 健康狀態 (整株弧形彎曲擺動)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_bend_seedling_healthy.json", dest: "tree-03-seedling/healthy.json" }],
+  },
+  {
+    key: "tree-03-withered",
+    label: "03 大樹苗 - 枯萎狀態 (整株彎曲 + 葉片跟隨擺動與搖曳)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_bend_seedling_withered.json", dest: "tree-03-seedling/withered.json" }],
   },
   {
     key: "tree-04-healthy",
@@ -330,7 +364,7 @@ const readme = `# Tree Growth Animation Bundle
 
 - 所有動畫都是標準 Lottie/Bodymovin JSON，可以用 \`lottie-web\`(網頁)、\`lottie-react-native\`、After Effects Bodymovin 外掛等任何支援 Lottie 的播放器開啟。
 - \`preview/index.html\`：獨立、可直接雙擊在瀏覽器打開的預覽頁(內含 lottie-web CDN 連結，需要網路)，可以切換各階段疊加在背景上的效果，並且正確示範了枯萎樹「掉葉永久保留」的播放邏輯。
-- \`previews-mp4/\`：對應的**單次播放**預覽影片，方便不方便架網頁環境時快速看效果。**這些影片不能設定循環播放**，只是給人看一次的，細節見下方各階段說明。
+- \`previews-mp4/\`(只有部分階段有)：對應的**單次播放**預覽影片，方便不方便架網頁環境時快速看效果。**這些影片不能設定循環播放**，只是給人看一次的，細節見下方各階段說明。
 
 ## 各階段動畫
 
@@ -338,11 +372,11 @@ ${readmeSections.join("\n---\n\n")}
 
 ## 疊圖方式
 
-所有動畫畫布都是 1000x1000、30fps、900 frames，樹的動畫直接疊在背景動畫上方(兩個獨立的 Lottie 容器，CSS \`position:absolute; inset:0\` 疊在同一個畫布尺寸的容器裡)即可對齊，不需要額外座標偏移。範例見 \`preview/index.html\`。
+所有動畫畫布都是 1000x1000、30fps、900 frames(05 枯萎為 1110 frames，見上方說明)，樹的動畫直接疊在背景動畫上方(兩個獨立的 Lottie 容器，CSS \`position:absolute; inset:0\` 疊在同一個畫布尺寸的容器裡)即可對齊，不需要額外座標偏移。範例見 \`preview/index.html\`。
 
-## 之後追加階段時
+## 之後更新或追加階段時
 
-這份 README 跟 preview 頁是用 \`my-animation/scripts/build-bundle.mjs\` 產生的，之後 05 號樹(健康/枯萎)做完後，只要在該腳本的 \`STAGES\` 陣列加一筆設定重新執行 \`node scripts/build-bundle.mjs\`，就會自動產生新的交付包，不需要手動整理。
+這份 README 跟 preview 頁是用 \`my-animation/scripts/build-bundle.mjs\` 產生的。某個階段的動畫更新後，重新執行 \`node scripts/build-bundle.mjs\` 即可；要追加新階段，只要在該腳本的 \`STAGES\` 陣列加一筆設定，就會自動產生新的交付包，不需要手動整理。
 `;
 fs.writeFileSync(path.join(STAGE_DIR, "README.md"), readme);
 console.log("Wrote README.md");

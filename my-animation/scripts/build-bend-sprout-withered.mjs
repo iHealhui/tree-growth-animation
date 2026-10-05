@@ -4,8 +4,9 @@
 // Same arc-bend technique as build-bend-sprout.mjs (healthy), tuned to read as
 // "no strength left": smaller and slower swing (centre nudged right to offset
 // the art's left-heavy look), and the bend travels UP the plant with a delay
-// so the leaves trail the stem like dead weight. On top of that each leaf slowly sags and lifts back on its own
-// (leaf droop), pivoting where it meets the stem.
+// so the leaves trail the stem like dead weight. On top of that each leaf
+// slowly sags and lifts back on its own (leaf droop), pivoting where it meets
+// the stem.
 //
 // The withered art has no trunk_main -- the stem is drawn inside both
 // leaf_NN_base shapes. That's fine for a whole-plant bend (both halves of the
@@ -353,6 +354,10 @@ function makeBendMap(time) {
     const [x, y] = droop(x0, y0);
     const below = Math.max(y - BASE_Y, 0); // anything under the base just stays put
     const h = Math.min(Math.max(BASE_Y - y, 0), BEND_H);
+    // above the top vertex (bezier handles can poke out past it, e.g. the
+    // withered seedling's hooked tip): carry on straight along the tip's
+    // tangent instead of clamping, which flattened those curves
+    const above = Math.max(BASE_Y - y - BEND_H, 0);
     const f = (h / BEND_H) * SPINE_STEPS;
     const k0 = Math.min(Math.floor(f), SPINE_STEPS - 1);
     const t = f - k0;
@@ -360,7 +365,10 @@ function makeBendMap(time) {
     const sy = table[k0][1] + (table[k0 + 1][1] - table[k0][1]) * t;
     const phi = phiAt(h);
     const d = x - BASE_X;
-    return [BASE_X + sx + d * Math.cos(phi), BASE_Y + sy + d * Math.sin(phi) + below];
+    return [
+      BASE_X + sx + d * Math.cos(phi) + above * Math.sin(phi),
+      BASE_Y + sy + d * Math.sin(phi) - above * Math.cos(phi) + below,
+    ];
   };
 }
 

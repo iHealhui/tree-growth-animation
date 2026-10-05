@@ -1,36 +1,37 @@
-// Bend build for tree_fg_02_sprout_healthy.svg. Does NOT touch the source SVG
-// -- writes only to public/_test_bend_sprout.json.
+// Build for stage 01 seed (tree_fg_01_seed_healthy.svg -- the seed only has a
+// healthy state). Does NOT touch the source SVG -- writes only to
+// public/_test_seed.json.
 //
-// Emulates AE's CC Bend It (what the sprout was previously hand-animated with,
-// see "AE project/CC Bend it 輸出版"): the base of trunk_main stays pinned and
-// the whole sprout (stem + stalk + both leaves) bends along one smooth arc,
-// swinging left/right. Unlike leaf-sway (whole-piece rotation per layer), the
-// path outlines themselves deform: every vertex AND both of its bezier handles
-// are pushed through the same bend map, so curves stay smooth (rotating only
-// vertices and leaving handles un-rotated is what kinks the outline).
-//
-// Lottie interpolates shape keyframes linearly per vertex, which would cut the
-// arc's corners if only the two extremes were keyed, so the bend is sampled
-// every SAMPLE_STEP frames along a sine wave instead.
+// Two gentle motions, both plain layer transforms (no shape keyframes, so the
+// file stays tiny):
+// 1. Breathing: the whole seed (body, crack and root) swells a little and
+//    settles back, scaled from the point where the seed rests on the soil so it
+//    never lifts off or sinks in. Driven by a null layer every part is parented
+//    to.
+// 2. Root wiggle: root_base + root_main rock about the point where the root
+//    leaves the seed, on a different rhythm from the breathing so the two never
+//    line up and read as mechanical.
 import fs from "node:fs";
 import path from "node:path";
 import parseSvgPath from "parse-svg-path";
 import absSvgPath from "abs-svg-path";
 
-const SRC = "../tree-stages/tree_fg_02_sprout_healthy.svg";
-const OUT_JSON = "public/_test_bend_sprout.json";
+const SRC = "../tree-stages/tree_fg_01_seed_healthy.svg";
+const OUT_JSON = "public/_test_seed.json";
 const FPS = 30;
 const OP = 900; // 30s loop, matches the background scene's master loop length
 const CANVAS_W = 1000;
 const CANVAS_H = 1000;
 
-// ---------- bend params ----------
-const BEND_AMPLITUDE_DEG = 10; // tip angle at full bend (each side)
-const BEND_PERIOD = 150; // frames per full left-right-left cycle (5s); must divide OP
-const BEND_PROFILE = 1; // angle(h) = A * (h/H)^PROFILE; 1 = circular arc like CC Bend It, >1 = stiffer base
-const SAMPLE_STEP = 3; // frames between shape keyframes
-if (OP % BEND_PERIOD !== 0) throw new Error("BEND_PERIOD must divide OP for a seamless loop");
-if (OP % SAMPLE_STEP !== 0) throw new Error("SAMPLE_STEP must divide OP");
+// ---------- motion params ----------
+const BREATH_SCALE = 2; // percent the seed swells at the peak
+const BREATH_PERIOD = 150; // frames per swell-and-settle (5s, same pace as the healthy sprout's swing); must divide OP
+const ROOT_DEG = 6; // root wiggle each side
+const ROOT_PERIOD = 90; // frames per full wiggle (3s); must divide OP
+for (const p of [BREATH_PERIOD, ROOT_PERIOD]) {
+  if (OP % p !== 0) throw new Error(p + " must divide OP for a seamless loop");
+}
+const ROOT_IDS = new Set(["root_base", "root_main"]);
 
 const svgText = fs.readFileSync(SRC, "utf8");
 const defsEnd = svgText.indexOf("</defs>") + "</defs>".length;
@@ -171,6 +172,17 @@ function makeSolidFill(hex) {
   return { ty: "fl", nm: "fill", c: { a: 0, k: [r, g, b, 1] }, o: { a: 0, k: 100 } };
 }
 
+function makeGradientFill(gradId) {
+  const grad = resolveGradient(gradId);
+  const gs = grad.stops.slice().sort((a, b) => a.offset - b.offset).map((s) => ({ offset: s.offset, rgb: hexToRgb1(s.color) }));
+  const k = [];
+  for (const s of gs) k.push(s.offset, ...s.rgb);
+  return {
+    ty: "gf", nm: "gradient-fill", o: { a: 0, k: 100 }, t: 1,
+    s: { a: 0, k: [grad.x1, grad.y1] }, e: { a: 0, k: [grad.x2, grad.y2] },
+    g: { p: gs.length, k: { a: 0, k } },
+  };
+}
 
 function getFill(raw) {
   const fillAttr = getAttr(raw, "fill");
@@ -247,6 +259,17 @@ function identityTransform() {
   };
 }
 
+function shapeItemFor(el) {
+  const contours = svgPathToLottieShape(el.d);
+  const it = contours.map((c, i) => ({
+    ty: "sh", nm: "path-" + i,
+    ks: { a: 0, k: { c: c.closed, v: c.v, i: c.i, o: c.o } },
+  }));
+  it.push(fillItemFor(el.fill));
+  it.push(identityTransform());
+  return { ty: "gr", nm: el.id, it };
+}
+
 function baseLayerTransform() {
   return {
     o: { a: 0, k: 100 }, r: { a: 0, k: 0 },
@@ -263,132 +286,62 @@ while ((m = pathRe.exec(bodyText))) {
   allElements.push({ id: getAttr(raw, "id"), d: getAttr(raw, "d"), fill: getFill(raw) });
 }
 console.log("Total <path> elements:", allElements.length, "(" + allElements.map((el) => el.id).join(", ") + ")");
-
-// ---------- bend frame: base = bottom-centre of trunk_main, height = up to the sprout's top ----------
-const trunk = allElements.find((el) => el.id === "trunk_main");
-if (!trunk) throw new Error("trunk_main not found");
-const trunkVerts = svgPathToLottieShape(trunk.d).flatMap((c) => c.v);
-const BASE_Y = Math.max(...trunkVerts.map((v) => v[1]));
-const bottomVerts = trunkVerts.filter((v) => BASE_Y - v[1] < 3);
-const BASE_X = bottomVerts.reduce((s, v) => s + v[0], 0) / bottomVerts.length;
-const TOP_Y = Math.min(...allElements.flatMap((el) => svgPathToLottieShape(el.d).flatMap((c) => c.v.map((v) => v[1]))));
-const BEND_H = BASE_Y - TOP_Y;
-console.log("Bend base:", BASE_X.toFixed(2), BASE_Y.toFixed(2), "| height:", BEND_H.toFixed(2));
-
-// Spine of the bent sprout: arc length h up from the base, tangent angle
-// phi(h) = A*(h/H)^PROFILE (0 = straight up, + = leaning right). Integrated
-// numerically so any PROFILE works. Each point keeps its horizontal offset
-// from the base line as a perpendicular offset from the spine, rotated by
-// phi at its height.
-const SPINE_STEPS = 400;
-function makeBendMap(amplitudeRad) {
-  const phiAt = (h) => amplitudeRad * Math.pow(h / BEND_H, BEND_PROFILE);
-  const table = [[0, 0]]; // spine [dx, dy] relative to the base, per step
-  const dh = BEND_H / SPINE_STEPS;
-  for (let k = 1; k <= SPINE_STEPS; k++) {
-    const phi = phiAt((k - 0.5) * dh);
-    const [px, py] = table[k - 1];
-    table.push([px + Math.sin(phi) * dh, py - Math.cos(phi) * dh]);
-  }
-  return (x, y) => {
-    const below = Math.max(y - BASE_Y, 0); // anything under the base just stays put
-    const h = Math.min(Math.max(BASE_Y - y, 0), BEND_H);
-    // above the top vertex (bezier handles can poke out past it, e.g. the
-    // withered seedling's hooked tip): carry on straight along the tip's
-    // tangent instead of clamping, which flattened those curves
-    const above = Math.max(BASE_Y - y - BEND_H, 0);
-    const f = (h / BEND_H) * SPINE_STEPS;
-    const k0 = Math.min(Math.floor(f), SPINE_STEPS - 1);
-    const t = f - k0;
-    const sx = table[k0][0] + (table[k0 + 1][0] - table[k0][0]) * t;
-    const sy = table[k0][1] + (table[k0 + 1][1] - table[k0][1]) * t;
-    const phi = phiAt(h);
-    const d = x - BASE_X;
-    return [
-      BASE_X + sx + d * Math.cos(phi) + above * Math.sin(phi),
-      BASE_Y + sy + d * Math.sin(phi) - above * Math.cos(phi) + below,
-    ];
-  };
+for (const id of ["seed_body", ...ROOT_IDS]) {
+  if (!allElements.some((el) => el.id === id)) throw new Error(id + " not found");
 }
+const vertsOf = (id) => svgPathToLottieShape(allElements.find((el) => el.id === id).d).flatMap((c) => c.v);
 
-// Deform a contour: map each vertex, and each handle as an absolute point
-// (vertex + handle), then convert back to relative -- this is what turns the
-// handles together with the vertex.
-function bendContour(c, map) {
-  const v = [], i = [], o = [];
-  for (let n = 0; n < c.v.length; n++) {
-    const [x, y] = c.v[n];
-    const nv = map(x, y);
-    const ni = map(x + c.i[n][0], y + c.i[n][1]);
-    const no = map(x + c.o[n][0], y + c.o[n][1]);
-    v.push(nv);
-    i.push([ni[0] - nv[0], ni[1] - nv[1]]);
-    o.push([no[0] - nv[0], no[1] - nv[1]]);
-  }
-  return { c: c.closed, v, i, o };
-}
+// where the seed rests on the soil: its lowest vertex
+const bodyVerts = vertsOf("seed_body");
+const REST_POINT = bodyVerts.reduce((a, b) => (b[1] > a[1] ? b : a));
+// where the root leaves the seed: the top end of root_main (it hangs straight
+// down from there; "nearest vertex to the seed body" picks the middle of the
+// root instead, because the tilted seed's lower edge runs right beside it)
+const ROOT_PIVOT = vertsOf("root_main").reduce((a, b) => (b[1] < a[1] ? b : a));
+console.log("Rest point:", REST_POINT.map((n) => n.toFixed(1)).join(","), "| root pivot:", ROOT_PIVOT.map((n) => n.toFixed(1)).join(","));
 
 // ---------- keyframes ----------
-// see project-composite-debug memory: lottie-web wants o+i on every keyframe
+// ease in/out between extremes, same curve as the grass/leaf sway; see
+// project-composite-debug memory: lottie-web wants o+i on every keyframe
 // except the last, and none on the last.
-const LINEAR_O = { x: [0.333], y: [0.333] };
-const LINEAR_I = { x: [0.667], y: [0.667] };
-const SAMPLE_TIMES = [];
-for (let t = 0; t <= OP; t += SAMPLE_STEP) SAMPLE_TIMES.push(t);
-const BEND_MAPS = SAMPLE_TIMES.map((t) =>
-  makeBendMap(((BEND_AMPLITUDE_DEG * Math.PI) / 180) * Math.sin((2 * Math.PI * t) / BEND_PERIOD))
-);
-
-function animated(values) {
-  return {
-    a: 1,
-    k: values.map((s, idx) =>
-      idx === values.length - 1 ? { t: SAMPLE_TIMES[idx], s } : { t: SAMPLE_TIMES[idx], s, o: LINEAR_O, i: LINEAR_I }
-    ),
-  };
-}
-
-function makeGradientFill(gradId) {
-  const grad = resolveGradient(gradId);
-  const gs = grad.stops.slice().sort((a, b) => a.offset - b.offset).map((s) => ({ offset: s.offset, rgb: hexToRgb1(s.color) }));
+const ease = { o: { x: [0.42], y: [0] }, i: { x: [0.58], y: [1] } };
+function pingPong(period, from, to) {
   const k = [];
-  for (const s of gs) k.push(s.offset, ...s.rgb);
-  // gradient endpoints ride the same bend so the colours stay glued to the shape
-  return {
-    ty: "gf", nm: "gradient-fill", o: { a: 0, k: 100 }, t: 1,
-    s: animated(BEND_MAPS.map((map) => map(grad.x1, grad.y1))),
-    e: animated(BEND_MAPS.map((map) => map(grad.x2, grad.y2))),
-    g: { p: gs.length, k: { a: 0, k } },
-  };
+  for (let t = 0; t < OP; t += period / 2) k.push({ t, s: (k.length % 2 ? to : from), ...ease });
+  k.push({ t: OP, s: from });
+  return { a: 1, k };
 }
 
-function shapeItemFor(el) {
-  const contours = svgPathToLottieShape(el.d);
-  const it = contours.map((c, n) => ({
-    ty: "sh", nm: "path-" + n,
-    // shape keyframe values are wrapped in an array: s: [{ c, v, i, o }]
-    ks: animated(BEND_MAPS.map((map) => [bendContour(c, map)])),
-  }));
-  it.push(fillItemFor(el.fill));
-  it.push(identityTransform());
-  return { ty: "gr", nm: el.id, it };
-}
+// breathing: a null layer scaled about the rest point; every part is parented to it
+const BREATH_IND = 1;
+const breathKs = baseLayerTransform();
+breathKs.a = { a: 0, k: [...REST_POINT, 0] };
+breathKs.p = { a: 0, k: [...REST_POINT, 0] };
+breathKs.s = pingPong(BREATH_PERIOD, [100, 100, 100], [100 + BREATH_SCALE, 100 + BREATH_SCALE, 100]);
+const breathLayer = { ddd: 0, ty: 3, nm: "seed_breath", sr: 1, ks: breathKs, ao: 0, ip: 0, op: OP, st: 0, ind: BREATH_IND };
+
+// root wiggle: rotation about the root pivot, starting at one extreme
+const rootKs = baseLayerTransform();
+rootKs.a = { a: 0, k: [...ROOT_PIVOT, 0] };
+rootKs.p = { a: 0, k: [...ROOT_PIVOT, 0] };
+rootKs.r = pingPong(ROOT_PERIOD, [ROOT_DEG], [-ROOT_DEG]);
 
 // ---------- assemble layers, preserving exact original document z-order ----------
 const orderedElements = allElements.slice().reverse(); // topmost-in-SVG first
-const layers = orderedElements.map((el, n) => ({
-  ddd: 0, ty: 4, nm: el.id, sr: 1, ks: baseLayerTransform(), ao: 0,
-  ip: 0, op: OP, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
-}));
+const layers = [
+  breathLayer,
+  ...orderedElements.map((el, i) => ({
+    ddd: 0, ty: 4, nm: el.id, sr: 1, ks: ROOT_IDS.has(el.id) ? rootKs : baseLayerTransform(), ao: 0,
+    ip: 0, op: OP, st: 0, ind: BREATH_IND + 1 + i, parent: BREATH_IND, shapes: [shapeItemFor(el)],
+  })),
+];
 
 const lottie = {
   v: "5.7.0", fr: FPS, ip: 0, op: OP, w: CANVAS_W, h: CANVAS_H,
-  nm: "Sprout Healthy - Bend (" + BEND_AMPLITUDE_DEG + "deg, " + BEND_PERIOD + "f period)",
+  nm: "Seed Healthy - breathing (" + BREATH_SCALE + "%, " + BREATH_PERIOD + "f) + root wiggle (" + ROOT_DEG + "deg, " + ROOT_PERIOD + "f)",
   assets: [], layers,
 };
 
 fs.mkdirSync(path.dirname(OUT_JSON), { recursive: true });
-// 3 decimals: sub-pixel for coordinates, finer than 1/255 for colour channels
-fs.writeFileSync(OUT_JSON, JSON.stringify(lottie, (k, v) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v)));
-console.log("Wrote", OUT_JSON, "| layers:", layers.length, "| keyframes per shape:", SAMPLE_TIMES.length,
-  "| size:", (fs.statSync(OUT_JSON).size / 1024).toFixed(0) + "KB");
+fs.writeFileSync(OUT_JSON, JSON.stringify(lottie));
+console.log("Wrote", OUT_JSON, "| layers:", layers.length, "| size:", (fs.statSync(OUT_JSON).size / 1024).toFixed(1) + "KB");

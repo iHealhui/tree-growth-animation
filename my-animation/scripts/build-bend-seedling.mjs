@@ -1,38 +1,81 @@
-// Bend build for tree_fg_02_sprout_healthy.svg. Does NOT touch the source SVG
-// -- writes only to public/_test_bend_sprout.json.
+// Bend build for stage 03 seedling, both states (tree_fg_03_seedling_healthy.svg
+// and _withered.svg). Does NOT touch the source SVGs -- writes only to
+// public/_test_bend_seedling_<state>.json.
 //
-// Emulates AE's CC Bend It (what the sprout was previously hand-animated with,
-// see "AE project/CC Bend it 輸出版"): the base of trunk_main stays pinned and
-// the whole sprout (stem + stalk + both leaves) bends along one smooth arc,
-// swinging left/right. Unlike leaf-sway (whole-piece rotation per layer), the
-// path outlines themselves deform: every vertex AND both of its bezier handles
-// are pushed through the same bend map, so curves stay smooth (rotating only
-// vertices and leaving handles un-rotated is what kinks the outline).
+// Two motions, baked into shape keyframes as pure geometry (except the leaf
+// flutter in "follow" mode, which is layer rotation -- see the leaves params):
+// 1. Whole-plant arc bend, same technique as build-bend-sprout.mjs (emulates
+//    AE's CC Bend It): base of trunk_main pinned, every vertex, both bezier
+//    handles and the gradient endpoints go through the same bend map. The
+//    seedling is ~4x taller than the sprout, so the angles are smaller and
+//    BEND_PROFILE > 1 keeps the lower trunk stiffer.
+// 2. Each leaf moves on its own about the point where it meets trunk_main
+//    (found automatically: the leaf vertex nearest any trunk vertex, same idea
+//    as the tree_04/05 anchors). Unlike the sprout, trunk_main is a separate
+//    shape here, so a rigid per-leaf rotation can't tear the stem. Applied in
+//    the rest pose, before the bend, so the leaves still ride the bend.
+//    - healthy: none -- the user wants the leaves to follow the stem's swing,
+//      not sway independently, so they only ride the bend
+//    - withered: "follow" -- blades swing with the stem a beat late plus a
+//      small flutter, pivoting at the blade/stalk joint (the "droop" mode --
+//      slow sag-and-recover like the withered sprout -- is kept for later stages)
 //
 // Lottie interpolates shape keyframes linearly per vertex, which would cut the
-// arc's corners if only the two extremes were keyed, so the bend is sampled
-// every SAMPLE_STEP frames along a sine wave instead.
+// arc's corners if only the extremes were keyed, so everything is sampled every
+// cfg.sampleStep frames instead.
 import fs from "node:fs";
 import path from "node:path";
 import parseSvgPath from "parse-svg-path";
 import absSvgPath from "abs-svg-path";
 
-const SRC = "../tree-stages/tree_fg_02_sprout_healthy.svg";
-const OUT_JSON = "public/_test_bend_sprout.json";
 const FPS = 30;
 const OP = 900; // 30s loop, matches the background scene's master loop length
 const CANVAS_W = 1000;
 const CANVAS_H = 1000;
 
-// ---------- bend params ----------
-const BEND_AMPLITUDE_DEG = 10; // tip angle at full bend (each side)
-const BEND_PERIOD = 150; // frames per full left-right-left cycle (5s); must divide OP
-const BEND_PROFILE = 1; // angle(h) = A * (h/H)^PROFILE; 1 = circular arc like CC Bend It, >1 = stiffer base
-const SAMPLE_STEP = 3; // frames between shape keyframes
-if (OP % BEND_PERIOD !== 0) throw new Error("BEND_PERIOD must divide OP for a seamless loop");
-if (OP % SAMPLE_STEP !== 0) throw new Error("SAMPLE_STEP must divide OP");
+// ---------- per-state params ----------
+// bend: amplitudeDeg = tip swing each side of centreDeg (+ = right);
+//   period must divide OP; lag = frames the top trails the base by;
+//   profile: angle(h) = A * (h/H)^profile, >1 = stiffer base.
+// sampleStep: frames between shape keyframes -- every motion here is slow (6s+),
+//   so 6 is smooth and keeps the files about half the size of sampling every 3.
+// leaves: mode "none" = ride the bend only; "sway" = +/-deg sine;
+//   "droop" = 0 -> deg -> 0, tip downward;
+//   "follow" = the blade swings with the stem (+/-deg, same period as the bend,
+//   `delay` frames behind it) plus a small flutter of its own (+/-swayDeg every
+//   swayPeriod, the tree_04/05 leaf rhythm). The flutter lives on the layer's
+//   rotation (pivot keyframed to ride the bend) rather than in the shape
+//   keyframes, so it stays smooth without sampling the shapes more often.
+//   Phases spread evenly across the leaves so they never move in unison.
+// A leaf with a separate leaf_NN_stalk pivots where its blade meets the stalk,
+// and the stalk itself only rides the bend -- so the stalk/trunk joint never
+// moves (the user split the stalks out of the withered art for exactly this).
+const STATES = {
+  healthy: {
+    src: "../tree-stages/tree_fg_03_seedling_healthy.svg",
+    out: "public/_test_bend_seedling_healthy.json",
+    bend: { amplitudeDeg: 6, centreDeg: 0, period: 180, lag: 0, profile: 1.5 },
+    leaves: { mode: "none", deg: 0, period: 60 },
+    sampleStep: 6,
+  },
+  withered: {
+    src: "../tree-stages/tree_fg_03_seedling_withered.svg",
+    out: "public/_test_bend_seedling_withered.json",
+    // no lag: on a plant this tall it read as the plant splitting apart
+    // mid-swing (user feedback). Leaves follow the stem, with a little flutter.
+    bend: { amplitudeDeg: 4, centreDeg: 0, period: 300, lag: 0, profile: 1.5 },
+    leaves: { mode: "follow", deg: 4, period: 300, delay: 10, swayDeg: 3, swayPeriod: 60 },
+    sampleStep: 6,
+  },
+};
+for (const [name, s] of Object.entries(STATES)) {
+  for (const p of [s.bend.period, s.leaves.period, s.leaves.swayPeriod || OP, s.sampleStep]) {
+    if (OP % p !== 0) throw new Error(name + ": " + p + " must divide OP for a seamless loop");
+  }
+}
 
-const svgText = fs.readFileSync(SRC, "utf8");
+function buildState(stateName, cfg) {
+const svgText = fs.readFileSync(cfg.src, "utf8");
 const defsEnd = svgText.indexOf("</defs>") + "</defs>".length;
 const defsText = svgText.slice(0, defsEnd);
 const bodyText = svgText.slice(defsEnd);
@@ -254,17 +297,26 @@ function baseLayerTransform() {
   };
 }
 
-// ---------- extract all top-level <path> elements in document order ----------
-const pathRe = /<path\b([^>]*?)\/>/g;
+// ---------- extract all top-level <path>/<polygon> elements in document order ----------
+// (healthy has a <polygon> leaf_01_stalk; converted to an equivalent closed path)
+const elRe = /<(path|polygon)\b([^>]*?)\/>/g;
 const allElements = [];
 let m;
-while ((m = pathRe.exec(bodyText))) {
+while ((m = elRe.exec(bodyText))) {
   const raw = m[0];
-  allElements.push({ id: getAttr(raw, "id"), d: getAttr(raw, "d"), fill: getFill(raw) });
+  let d = getAttr(raw, "d");
+  if (m[1] === "polygon") {
+    const n = getAttr(raw, "points").trim().split(/[\s,]+/).map(Number);
+    d = "M" + n[0] + "," + n[1];
+    for (let k = 2; k < n.length; k += 2) d += "L" + n[k] + "," + n[k + 1];
+    d += "Z";
+  }
+  const id = getAttr(raw, "id");
+  allElements.push({ id, d, fill: getFill(raw), leafGroup: getAttr(raw, "data-leaf-group") });
 }
-console.log("Total <path> elements:", allElements.length, "(" + allElements.map((el) => el.id).join(", ") + ")");
+console.log("Total elements:", allElements.length);
 
-// ---------- bend frame: base = bottom-centre of trunk_main, height = up to the sprout's top ----------
+// ---------- bend frame: base = bottom-centre of trunk_main, height = up to the plant's top ----------
 const trunk = allElements.find((el) => el.id === "trunk_main");
 if (!trunk) throw new Error("trunk_main not found");
 const trunkVerts = svgPathToLottieShape(trunk.d).flatMap((c) => c.v);
@@ -275,14 +327,65 @@ const TOP_Y = Math.min(...allElements.flatMap((el) => svgPathToLottieShape(el.d)
 const BEND_H = BASE_Y - TOP_Y;
 console.log("Bend base:", BASE_X.toFixed(2), BASE_Y.toFixed(2), "| height:", BEND_H.toFixed(2));
 
-// Spine of the bent sprout: arc length h up from the base, tangent angle
-// phi(h) = A*(h/H)^PROFILE (0 = straight up, + = leaning right). Integrated
-// numerically so any PROFILE works. Each point keeps its horizontal offset
-// from the base line as a perpendicular offset from the spine, rotated by
-// phi at its height.
+// ---------- leaf pivots ----------
+// with a separate stalk: the blade vertex nearest the stalk (blade/stalk joint);
+// otherwise: the leaf vertex nearest any trunk_main vertex (leaf/trunk joint)
+const isStalk = (el) => /_stalk$/.test(el.id);
+const leafGroups = [...new Set(allElements.map((el) => el.leafGroup).filter(Boolean))].sort();
+const LEAVES = leafGroups.map((group, idx) => {
+  const parts = allElements.filter((el) => el.leafGroup === group);
+  const stalks = parts.filter(isStalk);
+  const verts = parts.filter((el) => !isStalk(el)).flatMap((el) => svgPathToLottieShape(el.d).flatMap((c) => c.v));
+  const refVerts = stalks.length ? stalks.flatMap((el) => svgPathToLottieShape(el.d).flatMap((c) => c.v)) : trunkVerts;
+  let pivot = null, best = Infinity;
+  for (const v of verts) {
+    for (const rv of refVerts) {
+      const dist = Math.hypot(v[0] - rv[0], v[1] - rv[1]);
+      if (dist < best) { best = dist; pivot = v; }
+    }
+  }
+  // which side the leaf hangs off, so "droop" always turns the tip downward
+  const meanX = verts.reduce((s, v) => s + v[0], 0) / verts.length;
+  const side = meanX >= pivot[0] ? 1 : -1;
+  console.log(" ", group, "pivot", pivot.map((n) => n.toFixed(1)).join(","), "dist-to-" + (stalks.length ? "stalk" : "trunk"),
+    best.toFixed(2), side > 0 ? "right" : "left");
+  return { group, pivot, side, phase: idx / leafGroups.length };
+});
+const LEAF_BY_GROUP = Object.fromEntries(LEAVES.map((l) => [l.group, l]));
+
+const DEG = Math.PI / 180;
+function leafAngle(leaf, time) {
+  const { mode, deg, period } = cfg.leaves;
+  const cyc = 2 * Math.PI * (time / period + leaf.phase);
+  if (mode === "none") return 0;
+  if (mode === "sway") return deg * DEG * Math.sin(cyc);
+  // follow: same direction for every leaf (+ = clockwise = leaning right, like
+  // the bend), in time with the bend but `delay` frames late; the flutter on
+  // top is added as layer rotation (see leafLayerTransform)
+  if (mode === "follow") return deg * DEG * Math.sin((2 * Math.PI * (time - cfg.leaves.delay)) / cfg.bend.period);
+  // droop: + = clockwise on screen, i.e. down for a right-hand leaf
+  return leaf.side * deg * DEG * (0.5 - 0.5 * Math.cos(cyc));
+}
+
+function rotateAbout(px, py, a) {
+  const cos = Math.cos(a), sin = Math.sin(a);
+  return (x, y) => [px + (x - px) * cos - (y - py) * sin, py + (x - px) * sin + (y - py) * cos];
+}
+
+// Spine of the bent plant: arc length h up from the base, tangent angle
+// phi(h, t) (0 = straight up, + = leaning right), integrated numerically. Each
+// point keeps its horizontal offset from the base line as a perpendicular
+// offset from the spine, rotated by phi at its height. The swing at relative
+// height u is sampled lag*u frames in the past, so with lag > 0 the bend
+// reaches the top a beat after it starts at the base.
 const SPINE_STEPS = 400;
-function makeBendMap(amplitudeRad) {
-  const phiAt = (h) => amplitudeRad * Math.pow(h / BEND_H, BEND_PROFILE);
+function makeBendMap(time) {
+  const { amplitudeDeg, centreDeg, period, lag, profile } = cfg.bend;
+  const phiAt = (h) => {
+    const u = h / BEND_H;
+    const swing = Math.sin((2 * Math.PI * (time - lag * u)) / period);
+    return (centreDeg + amplitudeDeg * swing) * DEG * Math.pow(u, profile);
+  };
   const table = [[0, 0]]; // spine [dx, dy] relative to the base, per step
   const dh = BEND_H / SPINE_STEPS;
   for (let k = 1; k <= SPINE_STEPS; k++) {
@@ -311,6 +414,14 @@ function makeBendMap(amplitudeRad) {
   };
 }
 
+// full per-element map at one sample time: leaf rotation (rest pose) -> bend
+function makeElementMap(el, time, bend) {
+  const leaf = el.leafGroup && LEAF_BY_GROUP[el.leafGroup];
+  if (!leaf || isStalk(el)) return bend; // stalks stay glued to the trunk
+  const rot = rotateAbout(leaf.pivot[0], leaf.pivot[1], leafAngle(leaf, time));
+  return (x, y) => bend(...rot(x, y));
+}
+
 // Deform a contour: map each vertex, and each handle as an absolute point
 // (vertex + handle), then convert back to relative -- this is what turns the
 // handles together with the vertex.
@@ -334,40 +445,61 @@ function bendContour(c, map) {
 const LINEAR_O = { x: [0.333], y: [0.333] };
 const LINEAR_I = { x: [0.667], y: [0.667] };
 const SAMPLE_TIMES = [];
-for (let t = 0; t <= OP; t += SAMPLE_STEP) SAMPLE_TIMES.push(t);
-const BEND_MAPS = SAMPLE_TIMES.map((t) =>
-  makeBendMap(((BEND_AMPLITUDE_DEG * Math.PI) / 180) * Math.sin((2 * Math.PI * t) / BEND_PERIOD))
-);
+for (let t = 0; t <= OP; t += cfg.sampleStep) SAMPLE_TIMES.push(t);
+const BEND_MAPS = SAMPLE_TIMES.map((t) => makeBendMap(t));
 
-function animated(values) {
+function animatedAt(times, values) {
   return {
     a: 1,
     k: values.map((s, idx) =>
-      idx === values.length - 1 ? { t: SAMPLE_TIMES[idx], s } : { t: SAMPLE_TIMES[idx], s, o: LINEAR_O, i: LINEAR_I }
+      idx === values.length - 1 ? { t: times[idx], s } : { t: times[idx], s, o: LINEAR_O, i: LINEAR_I }
     ),
   };
 }
+const animated = (values) => animatedAt(SAMPLE_TIMES, values);
+
+// Leaf flutter ("follow" mode): rotate the blade layer about its pivot. The
+// pivot rides the bend (keyframed on the same samples as the shapes, so it
+// tracks the blade's own vertex exactly); the rotation is cheap scalar
+// keyframes, sampled finer than the shapes so the quick flutter stays smooth.
+const SWAY_STEP = 3;
+function leafLayerTransform(el) {
+  const leaf = el.leafGroup && LEAF_BY_GROUP[el.leafGroup];
+  const { mode, swayDeg, swayPeriod } = cfg.leaves;
+  if (!leaf || isStalk(el) || mode !== "follow" || !swayDeg) return baseLayerTransform();
+  const ks = baseLayerTransform();
+  const pivot = animated(BEND_MAPS.map((map) => [...map(leaf.pivot[0], leaf.pivot[1]), 0]));
+  ks.a = pivot;
+  ks.p = JSON.parse(JSON.stringify(pivot));
+  const times = [];
+  for (let t = 0; t <= OP; t += SWAY_STEP) times.push(t);
+  ks.r = animatedAt(times, times.map((t) => [swayDeg * Math.sin(2 * Math.PI * (t / swayPeriod + leaf.phase))]));
+  return ks;
+}
+
+let currentMaps = null; // per-element maps, set by shapeItemFor before its fill is built
 
 function makeGradientFill(gradId) {
   const grad = resolveGradient(gradId);
   const gs = grad.stops.slice().sort((a, b) => a.offset - b.offset).map((s) => ({ offset: s.offset, rgb: hexToRgb1(s.color) }));
   const k = [];
   for (const s of gs) k.push(s.offset, ...s.rgb);
-  // gradient endpoints ride the same bend so the colours stay glued to the shape
+  // gradient endpoints ride the same motion so the colours stay glued to the shape
   return {
     ty: "gf", nm: "gradient-fill", o: { a: 0, k: 100 }, t: 1,
-    s: animated(BEND_MAPS.map((map) => map(grad.x1, grad.y1))),
-    e: animated(BEND_MAPS.map((map) => map(grad.x2, grad.y2))),
+    s: animated(currentMaps.map((map) => map(grad.x1, grad.y1))),
+    e: animated(currentMaps.map((map) => map(grad.x2, grad.y2))),
     g: { p: gs.length, k: { a: 0, k } },
   };
 }
 
 function shapeItemFor(el) {
+  currentMaps = SAMPLE_TIMES.map((t, n) => makeElementMap(el, t, BEND_MAPS[n]));
   const contours = svgPathToLottieShape(el.d);
   const it = contours.map((c, n) => ({
     ty: "sh", nm: "path-" + n,
     // shape keyframe values are wrapped in an array: s: [{ c, v, i, o }]
-    ks: animated(BEND_MAPS.map((map) => [bendContour(c, map)])),
+    ks: animated(currentMaps.map((map) => [bendContour(c, map)])),
   }));
   it.push(fillItemFor(el.fill));
   it.push(identityTransform());
@@ -377,18 +509,27 @@ function shapeItemFor(el) {
 // ---------- assemble layers, preserving exact original document z-order ----------
 const orderedElements = allElements.slice().reverse(); // topmost-in-SVG first
 const layers = orderedElements.map((el, n) => ({
-  ddd: 0, ty: 4, nm: el.id, sr: 1, ks: baseLayerTransform(), ao: 0,
+  ddd: 0, ty: 4, nm: el.id, sr: 1, ks: leafLayerTransform(el), ao: 0,
   ip: 0, op: OP, st: 0, ind: n + 1, shapes: [shapeItemFor(el)],
 }));
 
+const b = cfg.bend, l = cfg.leaves;
 const lottie = {
   v: "5.7.0", fr: FPS, ip: 0, op: OP, w: CANVAS_W, h: CANVAS_H,
-  nm: "Sprout Healthy - Bend (" + BEND_AMPLITUDE_DEG + "deg, " + BEND_PERIOD + "f period)",
+  nm: "Seedling " + stateName + " - Bend (" + b.amplitudeDeg + "deg swing, " + b.centreDeg + "deg centre, " +
+    b.period + "f period, " + b.lag + "f lag) + leaf " + l.mode + " (" + l.deg + "deg, " + l.period + "f" +
+    (l.mode === "follow" ? ", " + l.delay + "f late, flutter " + l.swayDeg + "deg/" + l.swayPeriod + "f" : "") + ")",
   assets: [], layers,
 };
 
-fs.mkdirSync(path.dirname(OUT_JSON), { recursive: true });
+fs.mkdirSync(path.dirname(cfg.out), { recursive: true });
 // 3 decimals: sub-pixel for coordinates, finer than 1/255 for colour channels
-fs.writeFileSync(OUT_JSON, JSON.stringify(lottie, (k, v) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v)));
-console.log("Wrote", OUT_JSON, "| layers:", layers.length, "| keyframes per shape:", SAMPLE_TIMES.length,
-  "| size:", (fs.statSync(OUT_JSON).size / 1024).toFixed(0) + "KB");
+fs.writeFileSync(cfg.out, JSON.stringify(lottie, (k, v) => (typeof v === "number" ? Math.round(v * 1000) / 1000 : v)));
+console.log("Wrote", cfg.out, "| layers:", layers.length, "| keyframes per shape:", SAMPLE_TIMES.length,
+  "| size:", (fs.statSync(cfg.out).size / 1024).toFixed(0) + "KB");
+}
+
+for (const [stateName, cfg] of Object.entries(STATES)) {
+  console.log("\n=== " + stateName);
+  buildState(stateName, cfg);
+}
