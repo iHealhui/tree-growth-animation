@@ -14,6 +14,10 @@ const today = new Date().toISOString().slice(0, 10);
 const BUNDLE_NAME = `tree-growth-bundle-${today}`;
 const STAGE_DIR = path.join(ROOT, "exports", "bundle", BUNDLE_NAME);
 const ZIP_PATH = path.join(ROOT, "exports", "bundle", `${BUNDLE_NAME}.zip`);
+// what the previews-mp4/ videos are, shown on the preview page and in the
+// README -- keep in sync with the ffmpeg recipe in public/_export_frames_stage.html
+const MP4_SPEC = "480×480、24fps、H.264 (CRF 18)";
+const MP4_PURPOSE = "僅供快速預覽，畫質低於 Lottie 原尺寸 1000×1000，不是正式交付檔";
 
 // ---------- stage manifest: add a new object here for every future
 // completed stage and everything below (file copy, preview mp4 pick-up,
@@ -178,13 +182,14 @@ const previewHtml = `<!DOCTYPE html>
   .downloads a:hover { background: #3a6a3a; }
   .downloads a.disabled { opacity: 0.4; pointer-events: none; }
   .downloads .sep { width: 1px; height: 18px; background: #444; }
+  .downloads .note { font-size: 12px; color: #aaa; }
 </style>
 </head>
 <body>
 
 <div class="info">
   <b>Tree Growth Animation Bundle</b> 預覽頁。切換下方按鈕檢視各階段動畫疊加在共用背景上的效果。
-  枯萎狀態的葉子是<b>接力掉落後永久保留</b>(不會自動復原)：完整播放一次後只會循環搖曳段，只有重新整理本頁面才會回到滿葉狀態，這是刻意設計，細節見 README.md。
+  04、05 枯萎狀態的葉子是<b>接力掉落後永久保留</b>(不會自動復原)：完整播放一次後只會循環搖曳段，只有重新整理本頁面才會回到滿葉狀態，這是刻意設計，細節見 README.md。
 </div>
 
 <div class="controls">
@@ -200,6 +205,7 @@ ${buttonsHtml}
   <a id="dlMp4" class="disabled" download>目前階段的 MP4 預覽</a>
   <div class="sep"></div>
   <a id="dlZip" href="download/${BUNDLE_NAME}.zip" download="${BUNDLE_NAME}.zip">下載完整交付包 (.zip)</a>
+  <span class="note">MP4 規格：${MP4_SPEC}，${MP4_PURPOSE}。</span>
 </div>
 
 <div class="stage-wrap">
@@ -327,7 +333,10 @@ function fmtBytes(n) {
 
 const readmeSections = manifestForReadme.map((s) => {
   const fileLines = s.copiedFiles.map((f) => `  - \`${f.dest}\` (${fmtBytes(f.size)})`).join("\n");
-  const mp4Line = s.mp4Copied ? `\n  - \`${s.mp4Copied.dest}\` (${fmtBytes(s.mp4Copied.size)}, 純預覽用,**不循環播放**,不是最終效果)` : "";
+  const mp4Loop = s.playback === "loop"
+    ? "剛好一輪循環,可以循環播放"
+    : "完整播放一次掉葉過程,**不可循環播放**(一循環葉子會重新掉一次)";
+  const mp4Line = s.mp4Copied ? `\n  - \`${s.mp4Copied.dest}\` (${fmtBytes(s.mp4Copied.size)}, ${MP4_SPEC}, ${mp4Loop}; 純預覽用,不是最終效果)` : "";
   let playbackNote;
   if (s.playback === "loop") {
     playbackNote = `播放方式: 簡單無限循環 (\`loop: true\`)，${s.frames} frame 首尾已對齊，直接循環不會有跳動。`;
@@ -365,7 +374,7 @@ const readme = `# Tree Growth Animation Bundle
 
 - 所有動畫都是標準 Lottie/Bodymovin JSON，可以用 \`lottie-web\`(網頁)、\`lottie-react-native\`、After Effects Bodymovin 外掛等任何支援 Lottie 的播放器開啟。
 - \`preview/index.html\`：獨立、可直接雙擊在瀏覽器打開的預覽頁(內含 lottie-web CDN 連結，需要網路)，可以切換各階段疊加在背景上的效果，並且正確示範了枯萎樹「掉葉永久保留」的播放邏輯。
-- \`previews-mp4/\`：對應的**單次播放**預覽影片，方便不方便架網頁環境時快速看效果。**這些影片不能設定循環播放**，只是給人看一次的，細節見下方各階段說明。
+- \`previews-mp4/\`：每個階段的預覽影片(${MP4_SPEC})，方便不方便架網頁環境時快速看效果。${MP4_PURPOSE}。一般階段的影片剛好是一輪循環；04、05 枯萎是完整播放一次掉葉過程，**不可循環播放**。細節見下方各階段說明。
 
 ## 各階段動畫
 
