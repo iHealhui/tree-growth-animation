@@ -21,6 +21,20 @@ const MP4_PURPOSE = "備用方案：Lottie JSON 無法播放時改播這些影�
 // user's call: one looping video per stage, accepting that the withered
 // stages' leaves come back each cycle in the MP4 fallback
 const MP4_WITHERED_NOTE = "提醒：04、05 枯萎的 MP4 是整支循環播放，每一輪開頭葉子會長回來、再重新掉落一次，這點和 Lottie 版「掉葉後永久保留」不同";
+// linked from the preview page so viewers can find the source project
+const REPO_URL = "https://github.com/iHealhui/tree-growth-animation";
+
+// fs.cpSync silently kills Node 24 on Windows when the path has non-ASCII
+// characters (this project lives under 愛管家/), so copy folders by hand.
+function copyDir(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name);
+    const to = path.join(dest, entry.name);
+    if (entry.isDirectory()) copyDir(from, to);
+    else fs.copyFileSync(from, to);
+  }
+}
 
 // ---------- stage manifest: add a new object here for every future
 // completed stage and everything below (file copy, preview mp4 pick-up,
@@ -184,6 +198,8 @@ const previewHtml = `<!DOCTYPE html>
   .downloads { display: flex; gap: 10px; align-items: center; padding: 10px 16px; background: #1a1a1a; border-bottom: 1px solid #333; flex-wrap: wrap; }
   .downloads a { color: #eee; background: #2a4a2a; border: 1px solid #4a7a4a; border-radius: 4px; padding: 6px 12px; font-size: 13px; text-decoration: none; }
   .downloads a:hover { background: #3a6a3a; }
+  .downloads a.repo { background: #2a2a2a; border-color: #444; }
+  .downloads a.repo:hover { background: #3a3a3a; }
   .downloads a.disabled { opacity: 0.4; pointer-events: none; }
   .downloads .sep { width: 1px; height: 18px; background: #444; }
   .downloads .note { font-size: 12px; color: #aaa; }
@@ -206,6 +222,8 @@ ${buttonsHtml}
 </div>
 
 <div class="downloads">
+  <a class="repo" href="${REPO_URL}" target="_blank" rel="noopener">GitHub 專案原始碼</a>
+  <div class="sep"></div>
   <span>下載:</span>
   <a id="dlJson" class="disabled" download>目前階段的 Lottie JSON</a>
   <a id="dlMp4" class="disabled" download>目前階段的 MP4 (備用)</a>
@@ -339,13 +357,13 @@ for (const stage of STAGES) {
     const topFolder = f.dest.split("/")[0];
     if (copiedTopFolders.has(topFolder)) continue;
     copiedTopFolders.add(topFolder);
-    fs.cpSync(path.join(STAGE_DIR, topFolder), path.join(STAGE_DIR, "preview", topFolder), { recursive: true });
+    copyDir(path.join(STAGE_DIR, topFolder), path.join(STAGE_DIR, "preview", topFolder));
   }
 }
 // also copy previews-mp4/ next to the preview page so the per-stage MP4
 // download link resolves without reaching outside the preview/ folder.
 if (fs.existsSync(path.join(STAGE_DIR, "previews-mp4"))) {
-  fs.cpSync(path.join(STAGE_DIR, "previews-mp4"), path.join(STAGE_DIR, "preview", "previews-mp4"), { recursive: true });
+  copyDir(path.join(STAGE_DIR, "previews-mp4"), path.join(STAGE_DIR, "preview", "previews-mp4"));
   copiedTopFolders.add("previews-mp4");
 }
 fs.writeFileSync(path.join(STAGE_DIR, "preview", "index.html"), previewHtml);
