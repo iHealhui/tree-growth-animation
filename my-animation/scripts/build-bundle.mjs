@@ -393,7 +393,7 @@ const readmeSections = manifestForReadme.map((s) => {
 const readme = `# Tree Growth Animation Bundle
 
 產生時間: ${new Date().toISOString()}
-來源: Tree Growth_Background_animation 專案 (\`my-animation/scripts/build-bundle.mjs\`)
+來源: tree-growth-animation 專案 (\`my-animation/scripts/build-bundle.mjs\`)
 
 ## 這份交付包裡有什麼
 
