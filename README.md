@@ -2,6 +2,36 @@
 
 這是樹木成長動畫素材的**製作專案**，用來產生動畫檔交付給工程端使用。
 
+## 不知道怎麼接？直接問 AI
+
+把下面整段複製，直接貼給 AI（ChatGPT、Claude 等都可以），就會拿到可以直接用的程式碼。
+
+> 預設是用在**網頁**上。如果不是網頁（例如手機 App），請把第三行的「網頁」改成你用的平台。
+
+```
+請閱讀這個專案的說明：https://github.com/iHealhui/tree-growth-animation
+這是一組樹木成長的 Lottie 動畫素材（從預覽頁下載交付包：https://ihealhui.github.io/tree-growth-animation/），
+我要在網頁上使用。
+請依照以下規格，給我可以直接使用的完整範例程式碼，並一步一步說明要怎麼放進我的網頁：
+
+1. 畫面分兩層，同時播放：
+   - 底層：背景 background/scene-1.json，永遠循環播放，不需要更換。   - 上層：樹的動畫，疊在背景正上方。兩層都是 1000×1000、30fps，同樣大小重疊就會自動對齊，不需要調整座標。
+2. 切換階段或狀態時，只更換上層樹的動畫檔，背景繼續播放不中斷。
+3. 樹的檔案：
+   - tree-01-seed/healthy.json、tree-06-fruiting/healthy.json（只有健康狀態）
+   - tree-02-sprout、tree-03-seedling、tree-04-small、tree-05-mature 各有 healthy.json 和 withered.json
+4. 除了下面第 5 點的兩支之外，全部直接無限循環播放（loop）。
+5. tree-04-small/withered.json 和 tree-05-mature/withered.json 不能直接循環整段（不然掉落的葉子每一輪都會長回來）：
+   先不循環、完整播放一次，播完後改成只循環指定的區段：
+   - tree-04-small/withered.json：播完後循環第 450 ~ 900 格
+   - tree-05-mature/withered.json：播完後循環第 810 ~ 1110 格
+6. 只有在 Lottie 無法播放時，才改播 previews-mp4/ 裡的 MP4 備用影片。MP4 已經包含背景，要整個畫面直接替換、不要再疊背景。
+7. 請提醒我：直接雙擊打開 HTML 檔（網址是 file:// 開頭）時，瀏覽器會擋下讀取 JSON，畫面會是空白的。
+   請告訴我怎麼用本機伺服器開啟來測試（例如 VS Code 的 Live Server）。
+```
+
+> 什麼時候切換階段、切換到哪個狀態，由產品端決定，上面的程式只負責「切換後怎麼播放」。
+
 > **要拿動畫素材的話，不需要 clone 或執行這個專案。**
 > 請直接到預覽頁下載做好的交付包。
 
