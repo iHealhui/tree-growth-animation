@@ -20,7 +20,7 @@
 | 內容 | 說明 |
 |---|---|
 | `background/` | 共用背景動畫（雲朵飄動） |
-| `tree-01-seed/` ~ `tree-05-mature/` | 01 種子、02 嫩芽、03 大樹苗、04 小樹、05 成熟樹。01 只有健康狀態，02~05 各有健康 `healthy.json` 與枯萎 `withered.json` |
+| `tree-01-seed/` ~ `tree-06-fruiting/` | 01 種子、02 嫩芽、03 大樹苗、04 小樹、05 成熟樹、06 開花結果。01 和 06 只有健康狀態，02~05 各有健康 `healthy.json` 與枯萎 `withered.json` |
 | `previews-mp4/` | 每個階段一支 MP4 備用影片（已含背景） |
 | `preview/` | 離線版預覽頁，雙擊 `index.html` 即可開啟 |
 | `README.md` | **完整使用說明**：各檔案規格與播放方式 |

@@ -1,5 +1,5 @@
 // Assembles a clean, engineering-team-ready delivery bundle out of the
-// finished animation stages (the shared background scene + tree stages 01-05),
+// finished animation stages (the shared background scene + tree stages 01-06),
 // and zips it. Re-run any time a stage changes; a new stage is just one more
 // entry in STAGES below, nothing else in this script needs to change.
 //
@@ -113,6 +113,13 @@ const STAGES = [
     steadyStart: 810,
     steadyEnd: 1110,
     files: [{ src: "public/_test_leaf_sway_tree05_withered.json", dest: "tree-05-mature/withered.json" }],
+  },
+  {
+    key: "tree-06-healthy",
+    label: "06 開花結果 - 健康狀態 (葉子同 05、7 朵花慢轉、5 顆果實擺動 + 光澤掃過;開花結果只有健康狀態)",
+    fps: 30, frames: 900, size: "1000x1000",
+    playback: "loop",
+    files: [{ src: "public/_test_tree06_fruiting.json", dest: "tree-06-fruiting/healthy.json" }],
   },
 ];
 
